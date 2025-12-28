@@ -1,15 +1,27 @@
+/**
+ * Host Application - Native macOS app that displays Compose UI via IOSurface.
+ *
+ * Architecture:
+ * 1. Creates an IOSurface (shared GPU memory)
+ * 2. Displays it via CALayer.contents
+ * 3. Launches the Compose UI as a child process
+ * 4. UI renders to IOSurface, host sees it immediately (zero-copy)
+ *
+ * CVDisplayLink drives the refresh to match display vsync.
+ */
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
 #import "iosurface_provider.h"
 
-// View that displays an IOSurface as its layer contents
+/// NSView that displays an IOSurface via its backing CALayer.
+/// Uses CVDisplayLink for vsync-synchronized updates.
 @interface SurfaceView : NSView
 @property (assign) IOSurfaceRef surface;
 @property (assign) CVDisplayLinkRef displayLink;
 @end
 
-// CVDisplayLink callback - runs on display refresh
+/// CVDisplayLink callback - triggers layer redraw on each vsync.
 static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
                                     const CVTimeStamp *now,
                                     const CVTimeStamp *outputTime,

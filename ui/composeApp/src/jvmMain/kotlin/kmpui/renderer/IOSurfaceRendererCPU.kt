@@ -6,9 +6,19 @@ import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.*
 import org.jetbrains.skia.*
 
+/**
+ * CPU-based IOSurface renderer (fallback mode).
+ *
+ * Uses ImageComposeScene to render to an offscreen bitmap, then copies
+ * pixels to the IOSurface via JNA. This involves GPU→CPU→IOSurface copies,
+ * so it's slower than the GPU renderer but useful for debugging.
+ *
+ * Enable with --disable-gpu flag.
+ */
 fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
     println("[CPU] Looking up IOSurface ID $surfaceID...")
     
+    // Look up the IOSurface created by the host
     val surface = IOSurfaceLib.INSTANCE.IOSurfaceLookup(surfaceID)
         ?: error("Failed to lookup IOSurface ID $surfaceID")
 
@@ -18,10 +28,10 @@ fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
 
     println("[CPU] IOSurface: ${width}x${height}, bytesPerRow=$bytesPerRow")
 
-    // Create Skia bitmap for rendering - N32 is native format (BGRA on macOS)
+    // N32 = native 32-bit format (BGRA on macOS)
     val imageInfo = ImageInfo.makeN32Premul(width, height)
     
-    // Create offscreen Compose scene
+    // Offscreen Compose scene - renders to an Image
     val scene = ImageComposeScene(
         width = width,
         height = height,
@@ -29,11 +39,11 @@ fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
         content = content
     )
 
-    // Create target bitmap for reading pixels
+    // Bitmap to receive pixels from the rendered Image
     val targetBitmap = Bitmap()
     targetBitmap.allocPixels(imageInfo)
 
-    // Render loop
+    // Render loop - copies pixels each frame (CPU path)
     runBlocking {
         val frameDelayMs = 16L // ~60 FPS
         println("Starting render loop...")
