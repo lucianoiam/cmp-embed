@@ -35,11 +35,11 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "com.lucianoiam.kmpui.MainKt"
+        mainClass = "kmpui.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.lucianoiam.kmpui"
+            packageName = "kmpui"
             packageVersion = "1.0.0"
         }
         

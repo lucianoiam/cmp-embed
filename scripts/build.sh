@@ -2,12 +2,12 @@
 set -e
 cd "$(dirname "$0")/.."
 
-echo "=== Building KMP UI ==="
+echo "=== Building UI ==="
 cd ui
 ./gradlew :composeApp:createDistributable --quiet
 cd ..
 
-echo "=== Building Host App ==="
+echo "=== Building Host ==="
 cd host
 rm -rf build
 cmake -B build

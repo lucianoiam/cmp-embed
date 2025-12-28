@@ -117,10 +117,10 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     // Launch renderer as child process (inherits mach port)
     // Use the native distributable for direct child process launch
     // Get path relative to host executable: host/build/kmp-host.app/Contents/MacOS/kmp-host
-    // KMP UI is at: ui/composeApp/build/compose/binaries/main/app/com.lucianoiam.kmpui.app/Contents/MacOS/com.lucianoiam.kmpui
+    // KMP UI is at: ui/composeApp/build/compose/binaries/main/app/kmpui.app/Contents/MacOS/kmpui
     NSString *execPath = [[NSBundle mainBundle] executablePath];
     NSString *projectRoot = [[[[[[execPath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
-    NSString *rendererApp = [projectRoot stringByAppendingPathComponent:@"ui/composeApp/build/compose/binaries/main/app/com.lucianoiam.kmpui.app/Contents/MacOS/com.lucianoiam.kmpui"];
+    NSString *rendererApp = [projectRoot stringByAppendingPathComponent:@"ui/composeApp/build/compose/binaries/main/app/kmpui.app/Contents/MacOS/kmpui"];
     const char *args[] = { "--embed", NULL };
     iosurface_ipc_launch_child([rendererApp UTF8String], args, NULL);
 }

@@ -1,4 +1,4 @@
-package com.lucianoiam.kmpui
+package kmpui
 
 class JVMPlatform {
     val name: String = "Java ${System.getProperty("java.version")}"

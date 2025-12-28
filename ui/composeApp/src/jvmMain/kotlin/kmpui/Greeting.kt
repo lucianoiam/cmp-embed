@@ -1,4 +1,4 @@
-package com.lucianoiam.kmpui
+package kmpui
 
 class Greeting {
     private val platform = getPlatform()

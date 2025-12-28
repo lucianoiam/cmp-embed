@@ -1,4 +1,4 @@
-package com.lucianoiam.kmpui
+package kmpui
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application

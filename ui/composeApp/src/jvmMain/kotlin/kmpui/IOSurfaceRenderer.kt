@@ -1,4 +1,4 @@
-package com.lucianoiam.kmpui
+package kmpui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
