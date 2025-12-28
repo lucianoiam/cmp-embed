@@ -104,10 +104,35 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     iosurface_ipc_create_surface(800, 600);
     self.surface = iosurface_ipc_get_surface();
     
-    // Clear surface to dark gray initially
+    // Draw "Starting child process..." on dark background
+    size_t width = IOSurfaceGetWidth(self.surface);
+    size_t height = IOSurfaceGetHeight(self.surface);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     IOSurfaceLock(self.surface, 0, NULL);
-    memset(IOSurfaceGetBaseAddress(self.surface), 0x33, 
-           IOSurfaceGetBytesPerRow(self.surface) * 600);
+    CGContextRef ctx = CGBitmapContextCreate(
+        IOSurfaceGetBaseAddress(self.surface),
+        width, height, 8, IOSurfaceGetBytesPerRow(self.surface),
+        colorSpace, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little
+    );
+    // Dark gray background
+    CGContextSetRGBFillColor(ctx, 0.2, 0.2, 0.2, 1.0);
+    CGContextFillRect(ctx, CGRectMake(0, 0, width, height));
+    // White text centered
+    CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+    NSString *msg = @"Starting child process...";
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:24],
+        NSForegroundColorAttributeName: [NSColor whiteColor]
+    };
+    NSSize textSize = [msg sizeWithAttributes:attrs];
+    NSPoint point = NSMakePoint((width - textSize.width) / 2, (height - textSize.height) / 2);
+    NSGraphicsContext *nsCtx = [NSGraphicsContext graphicsContextWithCGContext:ctx flipped:NO];
+    [NSGraphicsContext saveGraphicsState];
+    [NSGraphicsContext setCurrentContext:nsCtx];
+    [msg drawAtPoint:point withAttributes:attrs];
+    [NSGraphicsContext restoreGraphicsState];
+    CGContextRelease(ctx);
+    CGColorSpaceRelease(colorSpace);
     IOSurfaceUnlock(self.surface, 0, NULL);
     
     // Create view backed by IOSurface
