@@ -17,8 +17,11 @@ fun main(args: Array<String>) {
             ?.toIntOrNull()
             ?: error("Missing --iosurface-id=<id> argument. This app must be launched by the host with --embed.")
         
+        // Check for --disable-gpu flag (falls back to CPU software rendering)
+        val disableGpu = args.contains("--disable-gpu")
+        
         // Render Compose content to the shared IOSurface
-        runIOSurfaceRenderer(surfaceID) {
+        runIOSurfaceRenderer(surfaceID, disableGpu) {
             App()
         }
     } else {

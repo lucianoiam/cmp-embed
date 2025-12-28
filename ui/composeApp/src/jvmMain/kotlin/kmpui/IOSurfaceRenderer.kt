@@ -3,25 +3,21 @@ package kmpui
 import androidx.compose.runtime.Composable
 
 /**
- * IOSurface renderer mode selection.
- * 
- * Set USE_GPU_RENDERER to true for GPU-accelerated rendering via Metal,
- * or false for CPU-based rendering via direct memory copy.
- * 
- * GPU mode requires the native library (libiosurface_renderer.dylib) to be built.
- * CPU mode works without any native dependencies beyond JNA.
- */
-private const val USE_GPU_RENDERER = true
-
-/**
  * Renders Compose content to an IOSurface.
  * 
- * The implementation used depends on the USE_GPU_RENDERER compile-time flag.
+ * By default uses GPU-accelerated zero-copy rendering via Metal.
+ * Pass disableGpu=true (--disable-gpu flag) to fall back to CPU rendering.
+ * 
+ * @param surfaceID The IOSurface ID to render to
+ * @param disableGpu If true, use CPU software rendering instead of GPU
+ * @param content The Compose content to render
  */
-fun runIOSurfaceRenderer(surfaceID: Int, content: @Composable () -> Unit) {
-    if (USE_GPU_RENDERER) {
-        runIOSurfaceRendererGPU(surfaceID, content)
-    } else {
+fun runIOSurfaceRenderer(surfaceID: Int, disableGpu: Boolean = false, content: @Composable () -> Unit) {
+    if (disableGpu) {
+        println("[Renderer] Using CPU software rendering (--disable-gpu)")
         runIOSurfaceRendererCPU(surfaceID, content)
+    } else {
+        println("[Renderer] Using GPU zero-copy rendering")
+        runIOSurfaceRendererGPU(surfaceID, content)
     }
 }
