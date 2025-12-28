@@ -179,8 +179,18 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 @end
 
+// Signal handler for Ctrl+C - ensures child process is terminated
+static void signalHandler(int sig) {
+    iosurface_ipc_stop();
+    exit(0);
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
+        // Handle Ctrl+C to ensure child cleanup
+        signal(SIGINT, signalHandler);
+        signal(SIGTERM, signalHandler);
+        
         NSApplication *app = [NSApplication sharedApplication];
         // Make app a regular app (shows in Dock, receives keyboard events)
         [app setActivationPolicy:NSApplicationActivationPolicyRegular];
