@@ -52,9 +52,10 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     return YES;
 }
 
-// Set IOSurface as layer contents
+// Set IOSurface as layer contents and mark as changed
 - (void)updateLayer {
     self.layer.contents = (__bridge id)self.surface;
+    [self.layer setContentsChanged];
 }
 
 @end
@@ -105,6 +106,10 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     [self.window setContentView:view];
     [self.window setDelegate:self];
     [self.window makeKeyAndOrderFront:nil];
+    
+    // Force initial display
+    [view.layer setNeedsDisplay];
+    [view.layer displayIfNeeded];
     
     // Activate app and bring window to front
     [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
