@@ -116,6 +116,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     view.surface = self.surface;
     
     [self.window setContentView:view];
+    [self.window setTitle:@"KMP Embed"];
     [self.window setDelegate:self];
     [self.window makeKeyAndOrderFront:nil];
     
