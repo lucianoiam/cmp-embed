@@ -196,24 +196,14 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                             val newSurfaceID = resizeEvent.newSurfaceID
                             println("[GPU] Handling resize: ${newWidth}x${newHeight}, new surface ID=$newSurfaceID")
                             
-                            // Close old scene first (it references the surface)
-                            scene.close()
-                            
-                            // Close old resources
+                            // Close old resources (but keep the scene!)
                             resources.close()
                             
                             // Create new resources for the new surface
                             resources = createRenderResources(metalContext, devicePtr, queuePtr, newSurfaceID)
                             
-                            // Recreate scene at new size
-                            scene = CanvasLayersComposeScene(
-                                density = Density(1f),
-                                size = IntSize(newWidth, newHeight),
-                                coroutineContext = Dispatchers.Unconfined,
-                                invalidate = { needsRedraw.set(true) }
-                            )
-                            scene.setContent(content)
-                            inputDispatcher = InputDispatcher(scene)
+                            // Update scene size - preserves all Compose state!
+                            scene.size = IntSize(newWidth, newHeight)
                             
                             println("[GPU] Resize complete: ${resources.width}x${resources.height}")
                             needsRedraw.set(true)

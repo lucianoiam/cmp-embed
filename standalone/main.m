@@ -174,7 +174,10 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     self.pendingSurface = iosurface_ipc_get_surface();
     input_send_resize(w, h, iosurface_ipc_get_surface_id());
     
-    // Swap after one frame (17ms) so child has time to render
+    // Swap after one frame (17ms) so child has time to render.
+    // For truly fast resize, you'd need signal-based coordination where
+    // the child signals "I rendered to the new surface" and the host
+    // swaps immediately upon receiving that signal.
     self.swapTimer = [NSTimer timerWithTimeInterval:0.017
                                              target:self
                                            selector:@selector(commitSwap)

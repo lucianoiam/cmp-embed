@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.*
+import kmpui.input.EventType
+import kmpui.input.InputReceiver
 import org.jetbrains.skia.*
 
 /**
@@ -13,10 +15,14 @@ import org.jetbrains.skia.*
  * pixels to the IOSurface via JNA. This involves GPU→CPU→IOSurface copies,
  * so it's slower than the GPU renderer but useful for debugging.
  *
+ * NOTE: This renderer does NOT support window resizing. Use the GPU renderer
+ * for production use cases that require resize support.
+ *
  * Enable with --disable-gpu flag.
  */
 fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
     println("[CPU] Looking up IOSurface ID $surfaceID...")
+    println("[CPU] WARNING: CPU renderer does not support window resizing!")
     
     // Look up the IOSurface created by the host
     val surface = IOSurfaceLib.INSTANCE.IOSurfaceLookup(surfaceID)
@@ -27,6 +33,16 @@ fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
     val bytesPerRow = IOSurfaceLib.INSTANCE.IOSurfaceGetBytesPerRow(surface)
 
     println("[CPU] IOSurface: ${width}x${height}, bytesPerRow=$bytesPerRow")
+
+    // Start input receiver - only to detect resize and crash explicitly
+    val inputReceiver = InputReceiver { event ->
+        if (event.type == EventType.RESIZE) {
+            error("[CPU] FATAL: Window resize not supported in CPU renderer! " +
+                  "The CPU renderer is for debugging only and uses a fixed-size buffer. " +
+                  "Use GPU renderer (remove --disable-gpu) for resize support.")
+        }
+    }
+    inputReceiver.start()
 
     // N32 = native 32-bit format (BGRA on macOS)
     val imageInfo = ImageInfo.makeN32Premul(width, height)
