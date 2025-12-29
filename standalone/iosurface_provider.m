@@ -9,6 +9,7 @@
  */
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurface.h>
+#import "input_cocoa.h"
 
 static IOSurfaceRef g_surface = NULL;
 static NSTask *g_child_task = nil;
@@ -40,6 +41,7 @@ uint32_t iosurface_ipc_get_surface_id(void) {
 }
 
 /// Launch child process with --embed and --iosurface-id=<id> arguments.
+/// Sets up stdin pipe for input forwarding.
 void iosurface_ipc_launch_child(const char *executable, const char *const *args, const char *workingDir) {
     if (!g_surface) {
         NSLog(@"IPC: No surface created, cannot launch child");
@@ -64,10 +66,16 @@ void iosurface_ipc_launch_child(const char *executable, const char *const *args,
         g_child_task.currentDirectoryURL = [NSURL fileURLWithPath:@(workingDir)];
     }
     
+    // Set up stdin pipe for input forwarding
+    NSPipe *stdinPipe = [NSPipe pipe];
+    g_child_task.standardInput = stdinPipe;
+    input_set_pipe([stdinPipe fileHandleForWriting]);
+    
     NSError *error = nil;
     [g_child_task launchAndReturnError:&error];
     if (error) {
         NSLog(@"IPC: Failed to launch child: %@", error);
+        input_close_pipe();
     } else {
         NSLog(@"IPC: Launched child with IOSurface ID %u", IOSurfaceGetID(g_surface));
     }
@@ -75,6 +83,7 @@ void iosurface_ipc_launch_child(const char *executable, const char *const *args,
 
 /// Terminate child process and release the IOSurface.
 void iosurface_ipc_stop(void) {
+    input_close_pipe();
     if (g_child_task && g_child_task.isRunning) {
         [g_child_task terminate];
     }

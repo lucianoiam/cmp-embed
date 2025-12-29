@@ -6,6 +6,7 @@
  * 2. Displays it via CALayer.contents
  * 3. Launches the Compose UI as a child process
  * 4. UI renders to IOSurface, standalone sees it immediately (zero-copy)
+ * 5. Input events are forwarded via stdin pipe (binary protocol)
  *
  * CVDisplayLink drives the refresh to match display vsync.
  */
@@ -13,9 +14,21 @@
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
 #import "iosurface_provider.h"
+#import "input_cocoa.h"
+
+/// Convert NSEvent modifier flags to our protocol bitmask
+static int getModifiers(NSEventModifierFlags flags) {
+    int mods = 0;
+    if (flags & NSEventModifierFlagShift) mods |= INPUT_MOD_SHIFT;
+    if (flags & NSEventModifierFlagControl) mods |= INPUT_MOD_CTRL;
+    if (flags & NSEventModifierFlagOption) mods |= INPUT_MOD_ALT;
+    if (flags & NSEventModifierFlagCommand) mods |= INPUT_MOD_META;
+    return mods;
+}
 
 /// NSView that displays an IOSurface via its backing CALayer.
 /// Uses CVDisplayLink for vsync-synchronized updates.
+/// Captures and forwards all input events to the Compose child process.
 @interface SurfaceView : NSView
 @property (assign) IOSurfaceRef surface;
 @property (assign) CVDisplayLinkRef displayLink;
@@ -59,6 +72,11 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     }
 }
 
+// Accept first responder to receive keyboard events
+- (BOOL)acceptsFirstResponder {
+    return YES;
+}
+
 // Use updateLayer instead of drawRect
 - (BOOL)wantsUpdateLayer {
     return YES;
@@ -68,6 +86,81 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 - (void)updateLayer {
     self.layer.contents = (__bridge id)self.surface;
     [self.layer setContentsChanged];
+}
+
+#pragma mark - Mouse Events
+
+- (void)mouseDown:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_LEFT, 1, getModifiers(event.modifierFlags));
+}
+
+- (void)mouseUp:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_LEFT, 0, getModifiers(event.modifierFlags));
+}
+
+- (void)rightMouseDown:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_RIGHT, 1, getModifiers(event.modifierFlags));
+}
+
+- (void)rightMouseUp:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_RIGHT, 0, getModifiers(event.modifierFlags));
+}
+
+- (void)otherMouseDown:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_MIDDLE, 1, getModifiers(event.modifierFlags));
+}
+
+- (void)otherMouseUp:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_button(loc.x, self.bounds.size.height - loc.y, INPUT_BUTTON_MIDDLE, 0, getModifiers(event.modifierFlags));
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_move(loc.x, self.bounds.size.height - loc.y, getModifiers(event.modifierFlags));
+}
+
+- (void)mouseDragged:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_move(loc.x, self.bounds.size.height - loc.y, getModifiers(event.modifierFlags));
+}
+
+- (void)rightMouseDragged:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_move(loc.x, self.bounds.size.height - loc.y, getModifiers(event.modifierFlags));
+}
+
+- (void)otherMouseDragged:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_move(loc.x, self.bounds.size.height - loc.y, getModifiers(event.modifierFlags));
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    input_send_mouse_scroll(loc.x, self.bounds.size.height - loc.y, event.scrollingDeltaX, event.scrollingDeltaY, getModifiers(event.modifierFlags));
+}
+
+#pragma mark - Keyboard Events
+
+- (void)keyDown:(NSEvent *)event {
+    NSString *chars = event.characters;
+    uint32_t codepoint = (chars.length > 0) ? [chars characterAtIndex:0] : 0;
+    input_send_key(event.keyCode, codepoint, 1, getModifiers(event.modifierFlags));
+}
+
+- (void)keyUp:(NSEvent *)event {
+    NSString *chars = event.characters;
+    uint32_t codepoint = (chars.length > 0) ? [chars characterAtIndex:0] : 0;
+    input_send_key(event.keyCode, codepoint, 0, getModifiers(event.modifierFlags));
+}
+
+- (void)flagsChanged:(NSEvent *)event {
+    // Modifier key state changed - could track individual modifiers if needed
 }
 
 @end

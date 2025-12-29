@@ -1,6 +1,6 @@
 # KMP Embed
 
-Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering.
+Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
 ## Architecture
 
@@ -9,24 +9,29 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 │  Standalone (native macOS app)                          │
 │  - Creates IOSurface (shared GPU memory)                │
 │  - Displays it via CALayer                              │
+│  - Captures input events → sends via stdin pipe         │
 │  - Launches UI as child process                         │
 └─────────────────┬───────────────────────────────────────┘
-                  │ IOSurface ID
-                  ▼
+                  │ IOSurface ID (arg)    Input events (stdin)
+                  │        ↓                     ↓
+                  ▼────────────────────────────────────────
 ┌─────────────────────────────────────────────────────────┐
 │  UI (Compose Desktop / Skia / Metal)                    │
 │  - Renders directly to IOSurface-backed Metal texture   │
+│  - Receives input events, injects into ComposeScene     │
 │  - Zero CPU pixel copies                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
-The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved.
+**Rendering:** The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved.
+
+**Input:** Mouse/keyboard events are captured in the standalone app and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
 ## Requirements
 
 - macOS 10.15+
 - JDK 17+ (for building; the app bundles its own JRE)
-- CMake 3.10+
+- CMake 3.15+
 - Xcode Command Line Tools (`xcode-select --install`)
 
 ## Build
@@ -54,15 +59,23 @@ Or after building:
 ## Project Structure
 
 ```
+common/                # Cross-platform shared code
+  input_protocol.h     # Binary input event protocol (16 bytes/event)
+
 standalone/            # Native macOS standalone application
-  main.m               # Window, IOSurface display, child process launch
-  iosurface_provider.m # IOSurface creation and IPC
+  main.m               # Window, IOSurface display, input capture
+  iosurface_provider.m # IOSurface creation and child process launch
+  input_cocoa.h/.m     # Input event sender (macOS implementation)
 
 ui/composeApp/         # Kotlin Multiplatform Compose application
   src/jvmMain/
     kotlin/kmpui/
       main.kt          # Entry point (standalone or embedded mode)
-      App.kt           # Compose UI
+      App.kt           # Compose UI (vanilla demo app)
+      input/           # Input event handling
+        InputEvent.kt      # Event data classes
+        InputReceiver.kt   # Reads binary events from stdin
+        InputDispatcher.kt # Injects events into ComposeScene
       renderer/        # IOSurface rendering
         IOSurfaceRendererGPU.kt  # Zero-copy Metal path (default)
         IOSurfaceRendererCPU.kt  # CPU fallback (--disable-gpu)
@@ -70,8 +83,8 @@ ui/composeApp/         # Kotlin Multiplatform Compose application
       iosurface_renderer.m       # Native Metal bridge for Skia
 
 scripts/
-  build.sh             # Build everything
-  run_standalone.sh    # Run standalone app
+  build.sh             # Build everything (CMake orchestrated)
+  run_standalone.sh    # Build and run standalone app
 ```
 
 ## Flags
@@ -80,6 +93,27 @@ The UI app supports:
 - `--embed` - Run as embedded renderer (required when launched by standalone)
 - `--iosurface-id=<id>` - IOSurface to render to
 - `--disable-gpu` - Use CPU software rendering instead of Metal
+
+## Input Protocol
+
+Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`):
+
+| Offset | Size | Field      | Description                           |
+|--------|------|------------|---------------------------------------|
+| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize     |
+| 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
+| 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
+| 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
+| 4      | 2    | x          | Mouse X or key code                   |
+| 6      | 2    | y          | Mouse Y                               |
+| 8      | 2    | data1      | Scroll delta X (*100) or codepoint    |
+| 10     | 2    | data2      | Scroll delta Y (*100)                 |
+| 12     | 4    | timestamp  | Milliseconds since process start      |
+
+## Future
+
+- Windows standalone (Win32 + DirectX)
+- JUCE integration (for audio plugin hosts)
 
 ## License
 

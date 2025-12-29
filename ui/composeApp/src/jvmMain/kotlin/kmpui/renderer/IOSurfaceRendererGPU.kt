@@ -11,7 +11,11 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import kotlinx.coroutines.*
+import kmpui.input.InputDispatcher
+import kmpui.input.InputEvent
+import kmpui.input.InputReceiver
 import org.jetbrains.skia.*
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -119,6 +123,15 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                     scene.setContent(content)
                     println("[GPU] ComposeScene created")
                     
+                    // Set up input handling
+                    val inputDispatcher = InputDispatcher(scene)
+                    val eventQueue = ConcurrentLinkedQueue<InputEvent>()
+                    val inputReceiver = InputReceiver { event ->
+                        eventQueue.offer(event)
+                    }
+                    inputReceiver.start()
+                    println("[GPU] Input receiver started")
+                    
                     try {
                         // Render loop - Compose draws directly to IOSurface!
                         runBlocking {
@@ -129,6 +142,12 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                             
                             while (true) {
                                 try {
+                                    // Process pending input events
+                                    while (true) {
+                                        val event = eventQueue.poll() ?: break
+                                        inputDispatcher.dispatch(event)
+                                    }
+                                    
                                     // Clear and render Compose content directly to IOSurface
                                     val canvas = skiaSurface.canvas
                                     canvas.clear(Color.WHITE)
@@ -156,6 +175,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                             }
                         }
                     } finally {
+                        inputReceiver.stop()
                         scene.close()
                     }
                 } finally {
