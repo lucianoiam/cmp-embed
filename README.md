@@ -2,6 +2,18 @@
 
 Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
+## Quick Start
+
+```bash
+./scripts/build.sh && ./scripts/run_standalone.sh
+```
+
+**Prerequisites:**
+- macOS 10.15+
+- JDK 17+ (`brew install openjdk@17`)
+- CMake 3.15+ (`brew install cmake`)
+- Xcode Command Line Tools (`xcode-select --install`)
+
 ## Architecture
 
 ```
@@ -30,13 +42,6 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 **Input:** Mouse/keyboard events are captured in the standalone app and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
 **Resize:** Window resizing uses delayed swap to avoid flicker. The standalone creates a new IOSurface at the target size, tells the child to render to it, waits one frame (~17ms) for the child to complete rendering, then swaps the displayed surface.
-
-## Requirements
-
-- macOS 10.15+
-- JDK 17+ (for building; the app bundles its own JRE)
-- CMake 3.15+
-- Xcode Command Line Tools (`xcode-select --install`)
 
 ## Build
 
