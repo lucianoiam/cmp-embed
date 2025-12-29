@@ -146,19 +146,10 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 #pragma mark - Resize Handling
 
-/**
- * Delayed swap: called after giving child time to render.
- *
- * Strategy to eliminate flicker:
- * 1. beginResize creates new surface, tells child to render
- * 2. Old surface continues to be displayed
- * 3. After 16ms delay, this swaps to the new surface
- * 4. If more resizes are pending, start another cycle
- */
+/// Swap pending surface after child has rendered
 - (void)commitSwap {
     self.swapTimer = nil;
     
-    // Swap in the pending surface (child should have rendered by now)
     if (self.pendingSurface) {
         self.surface = self.pendingSurface;
         self.pendingSurface = NULL;
@@ -166,44 +157,24 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         [self.layer setNeedsDisplay];
     }
     
-    // Check if more resizes are pending
-    int pendingWidth = (int)self.pendingSize.width;
-    int pendingHeight = (int)self.pendingSize.height;
-    int lastWidth = (int)self.lastCommittedSize.width;
-    int lastHeight = (int)self.lastCommittedSize.height;
-    
-    if (pendingWidth != lastWidth || pendingHeight != lastHeight) {
-        // More resize pending - start another cycle
+    // Continue if size changed during swap delay
+    if (!NSEqualSizes(self.pendingSize, self.lastCommittedSize)) {
         [self beginResize];
     }
 }
 
-/**
- * Begin a resize operation.
- *
- * Creates new surface, tells child to render, schedules delayed swap.
- * Old surface remains displayed until swap completes.
- */
+/// Create new surface and schedule swap after one frame
 - (void)beginResize {
-    int newWidth = (int)self.pendingSize.width;
-    int newHeight = (int)self.pendingSize.height;
+    int w = (int)self.pendingSize.width, h = (int)self.pendingSize.height;
+    if (w <= 0 || h <= 0) return;
     
-    if (newWidth <= 0 || newHeight <= 0) return;
-    
-    // Cancel any pending swap
     [self.swapTimer invalidate];
-    self.swapTimer = nil;
     
-    // Create new surface at the target size
-    iosurface_ipc_resize_surface(newWidth, newHeight);
-    
-    // Store as pending (don't display yet!)
+    iosurface_ipc_resize_surface(w, h);
     self.pendingSurface = iosurface_ipc_get_surface();
+    input_send_resize(w, h, iosurface_ipc_get_surface_id());
     
-    // Tell child to render to the new surface
-    input_send_resize(newWidth, newHeight, iosurface_ipc_get_surface_id());
-    
-    // Wait one full frame (~16.67ms at 60fps) to guarantee child has rendered
+    // Swap after one frame (17ms) so child has time to render
     self.swapTimer = [NSTimer timerWithTimeInterval:0.017
                                              target:self
                                            selector:@selector(commitSwap)
@@ -212,32 +183,15 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     [[NSRunLoop currentRunLoop] addTimer:self.swapTimer forMode:NSRunLoopCommonModes];
 }
 
-/**
- * Handle window resize.
- *
- * Uses delayed-swap to eliminate flicker:
- * - Creates new surface, keeps showing old one
- * - After child renders, swaps to new surface
- * - Throttled to ~60fps during drag
- */
+/// Handle window resize with delayed swap to avoid flicker
 - (void)setFrameSize:(NSSize)newSize {
     [super setFrameSize:newSize];
     
-    int newWidth = (int)newSize.width;
-    int newHeight = (int)newSize.height;
-    int lastWidth = (int)self.lastCommittedSize.width;
-    int lastHeight = (int)self.lastCommittedSize.height;
-    
-    // Only process actual size changes
-    if ((newWidth != lastWidth || newHeight != lastHeight) && newWidth > 0 && newHeight > 0) {
-        // Store the target size
+    if (!NSEqualSizes(newSize, self.lastCommittedSize) && newSize.width > 0 && newSize.height > 0) {
         self.pendingSize = newSize;
-        
-        // If no resize cycle active, start one
         if (!self.swapTimer) {
             [self beginResize];
         }
-        // Otherwise, pendingSize is updated for next cycle
     }
 }
 

@@ -11,6 +11,7 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 │  - Displays it via CALayer                              │
 │  - Captures input events → sends via stdin pipe         │
 │  - Launches UI as child process                         │
+│  - Handles window resize with delayed swap              │
 └─────────────────┬───────────────────────────────────────┘
                   │ IOSurface ID (arg)    Input events (stdin)
                   │        ↓                     ↓
@@ -19,13 +20,16 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 │  UI (Compose Desktop / Skia / Metal)                    │
 │  - Renders directly to IOSurface-backed Metal texture   │
 │  - Receives input events, injects into ComposeScene     │
-│  - Zero CPU pixel copies                                │
+│  - Handles resize: recreates resources for new surface  │
+│  - Zero CPU pixel copies, invalidation-based rendering  │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Rendering:** The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved.
+**Rendering:** The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
 
 **Input:** Mouse/keyboard events are captured in the standalone app and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
+
+**Resize:** Window resizing uses delayed swap to avoid flicker. The standalone creates a new IOSurface at the target size, tells the child to render to it, waits one frame (~17ms) for the child to complete rendering, then swaps the displayed surface.
 
 ## Requirements
 
@@ -112,8 +116,11 @@ Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`
 
 ## Future
 
-- Windows standalone (Win32 + DirectX)
-- JUCE integration (for audio plugin hosts)
+See [TODO.txt](TODO.txt) for planned enhancements including:
+- HiDPI/Retina support
+- Bidirectional IPC (cursor, clipboard)
+- Windows/Linux platform support
+- JUCE integration for audio plugin hosts
 
 ## License
 

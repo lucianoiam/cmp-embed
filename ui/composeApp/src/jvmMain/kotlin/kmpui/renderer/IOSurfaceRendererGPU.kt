@@ -180,7 +180,6 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
         try {
             // Render loop - Compose draws directly to IOSurface!
             runBlocking {
-                val targetFrameTimeNs = 16_666_667L // ~60 FPS (16.67ms)
                 println("[GPU] Starting zero-copy render loop...")
                 System.out.flush()
                 var frameCount = 0
@@ -247,18 +246,16 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                                 System.out.flush()
                             }
                             frameCount++
-                        }
-                        
-                        // Precise frame pacing - sleep for remaining time
-                        val elapsed = System.nanoTime() - frameStart
-                        val sleepNs = targetFrameTimeNs - elapsed
-                        if (sleepNs > 1_000_000) { // Only sleep if > 1ms remaining
-                            delay(sleepNs / 1_000_000)
-                        } else if (sleepNs > 0) {
-                            // Spin-wait for sub-millisecond precision
-                            while (System.nanoTime() - frameStart < targetFrameTimeNs) {
-                                Thread.yield()
+                            
+                            // After rendering, sleep until next frame
+                            val elapsed = System.nanoTime() - frameStart
+                            val sleepMs = (16_666_667L - elapsed) / 1_000_000
+                            if (sleepMs > 0) {
+                                delay(sleepMs)
                             }
+                        } else {
+                            // Idle - sleep longer to save CPU, wake on invalidation
+                            delay(16)
                         }
                     } catch (e: CancellationException) {
                         throw e
