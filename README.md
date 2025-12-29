@@ -6,7 +6,7 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Host (native macOS app)                                │
+│  Standalone (native macOS app)                          │
 │  - Creates IOSurface (shared GPU memory)                │
 │  - Displays it via CALayer                              │
 │  - Launches UI as child process                         │
@@ -20,7 +20,7 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 └─────────────────────────────────────────────────────────┘
 ```
 
-The host creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved.
+The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved.
 
 ## Requirements
 
@@ -38,23 +38,23 @@ The host creates an IOSurface and passes its ID to the child process. The Compos
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
 2. **Compose UI app** (`kmpui.app` with bundled JRE)
-3. **Host app** (`host.app`)
+3. **Standalone app** (`standalone.app`)
 
 ## Run
 
 ```bash
-./scripts/run.sh
+./scripts/run_standalone.sh
 ```
 
 Or after building:
 ```bash
-./host/build/host.app/Contents/MacOS/host
+./build/standalone/standalone.app/Contents/MacOS/standalone
 ```
 
 ## Project Structure
 
 ```
-host/                  # Native macOS host application
+standalone/            # Native macOS standalone application
   main.m               # Window, IOSurface display, child process launch
   iosurface_provider.m # IOSurface creation and IPC
 
@@ -71,13 +71,13 @@ ui/composeApp/         # Kotlin Multiplatform Compose application
 
 scripts/
   build.sh             # Build everything
-  run.sh               # Build and run
+  run_standalone.sh    # Run standalone app
 ```
 
 ## Flags
 
 The UI app supports:
-- `--embed` - Run as embedded renderer (required when launched by host)
+- `--embed` - Run as embedded renderer (required when launched by standalone)
 - `--iosurface-id=<id>` - IOSurface to render to
 - `--disable-gpu` - Use CPU software rendering instead of Metal
 

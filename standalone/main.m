@@ -1,11 +1,11 @@
 /**
- * Host Application - Native macOS app that displays Compose UI via IOSurface.
+ * Standalone Application - Native macOS app that displays Compose UI via IOSurface.
  *
  * Architecture:
  * 1. Creates an IOSurface (shared GPU memory)
  * 2. Displays it via CALayer.contents
  * 3. Launches the Compose UI as a child process
- * 4. UI renders to IOSurface, host sees it immediately (zero-copy)
+ * 4. UI renders to IOSurface, standalone sees it immediately (zero-copy)
  *
  * CVDisplayLink drives the refresh to match display vsync.
  */

@@ -1,7 +1,7 @@
 /**
  * IOSurface Provider - Creates shared GPU memory for cross-process rendering.
  *
- * The host creates an IOSurface and launches the UI process, passing the surface ID.
+ * The standalone app creates an IOSurface and launches the UI process, passing the surface ID.
  * The UI process looks up the surface by ID and renders directly to it.
  *
  * Note: kIOSurfaceIsGlobal is deprecated but required for IOSurfaceLookup() to work
@@ -13,7 +13,7 @@
 static IOSurfaceRef g_surface = NULL;
 static NSTask *g_child_task = nil;
 
-#pragma mark - Host (Parent) API
+#pragma mark - Standalone (Parent) API
 
 /// Create a shared IOSurface with the given dimensions.
 void iosurface_ipc_create_surface(int width, int height) {
