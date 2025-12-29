@@ -68,7 +68,7 @@ extern "C" {
  *
  * FOCUS: data1 = 1 if focused, 0 if unfocused
  *
- * RESIZE: x = new width, y = new height
+ * RESIZE: x = new width, y = new height, timestamp = new IOSurface ID
  */
 #pragma pack(push, 1)
 typedef struct {
@@ -76,11 +76,11 @@ typedef struct {
     uint8_t  action;    /* INPUT_ACTION_* */
     uint8_t  button;    /* INPUT_BUTTON_* for mouse */
     uint8_t  modifiers; /* INPUT_MOD_* bitmask */
-    int16_t  x;         /* Mouse X or key code */
-    int16_t  y;         /* Mouse Y */
+    int16_t  x;         /* Mouse X, key code, or width */
+    int16_t  y;         /* Mouse Y or height */
     int16_t  data1;     /* Scroll X or codepoint low */
     int16_t  data2;     /* Scroll Y or codepoint high */
-    uint32_t timestamp; /* Milliseconds since process start */
+    uint32_t timestamp; /* Milliseconds or new surface ID for RESIZE */
 } InputEvent;
 #pragma pack(pop)
 

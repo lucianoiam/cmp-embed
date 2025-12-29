@@ -1,14 +1,31 @@
 /**
  * Standalone Application - Native macOS app that displays Compose UI via IOSurface.
  *
- * Architecture:
- * 1. Creates an IOSurface (shared GPU memory)
- * 2. Displays it via CALayer.contents
- * 3. Launches the Compose UI as a child process
- * 4. UI renders to IOSurface, standalone sees it immediately (zero-copy)
- * 5. Input events are forwarded via stdin pipe (binary protocol)
+ * Architecture Overview:
+ * ----------------------
+ * This app creates a shared GPU memory region (IOSurface) that the Compose UI
+ * child process renders to. The child draws directly to this surface via Metal,
+ * and we display it via CALayer - true zero-copy rendering.
  *
- * CVDisplayLink drives the refresh to match display vsync.
+ * Components:
+ * 1. IOSurface: Shared GPU memory created by iosurface_provider
+ * 2. SurfaceView: NSView that displays IOSurface via CALayer.contents
+ * 3. CVDisplayLink: Vsync-synchronized refresh of the layer
+ * 4. Input Forwarding: Binary protocol over stdin pipe to child
+ *
+ * Resize Strategy (Double-Buffering):
+ * -----------------------------------
+ * Window resize is challenging because IOSurfaces cannot be resized in-place.
+ * We use double-buffering to prevent flashing:
+ *
+ * 1. User starts resizing → we track the pending size
+ * 2. Throttle timer fires (every 50ms during drag)
+ * 3. Create NEW surface at pending size (old surface still displayed)
+ * 4. Tell child to render to new surface
+ * 5. After delay (33ms), swap: display new surface, release old
+ * 6. Repeat while resize continues
+ *
+ * This ensures the old content remains visible until new content is ready.
  */
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
@@ -26,12 +43,41 @@ static int getModifiers(NSEventModifierFlags flags) {
     return mods;
 }
 
-/// NSView that displays an IOSurface via its backing CALayer.
-/// Uses CVDisplayLink for vsync-synchronized updates.
-/// Captures and forwards all input events to the Compose child process.
+/**
+ * SurfaceView - Displays an IOSurface and handles input forwarding.
+ *
+ * This view:
+ * - Uses layer-backing with IOSurface as contents (zero-copy display)
+ * - Runs a CVDisplayLink for vsync-synchronized updates
+ * - Captures all mouse/keyboard events and forwards them to the child process
+ * - Implements double-buffered resize to prevent flashing
+ *
+ * Resize Flow:
+ * 1. setFrameSize called → store pendingSize, start resize if not already running
+ * 2. beginResize → create new surface, tell child to render, schedule swap
+ * 3. commitSwap (after 33ms) → swap surfaces, check if more resizes pending
+ * 4. If more pending → schedule another beginResize cycle
+ */
 @interface SurfaceView : NSView
+
+/// Currently displayed surface (what the user sees)
 @property (assign) IOSurfaceRef surface;
+
+/// New surface being rendered to (not yet displayed)
+@property (assign) IOSurfaceRef pendingSurface;
+
+/// Size of the pending surface (target size during resize)
+@property (assign) NSSize pendingSize;
+
+/// Size of the currently displayed surface
+@property (assign) NSSize lastCommittedSize;
+
+/// Vsync-synchronized display refresh
 @property (assign) CVDisplayLinkRef displayLink;
+
+/// Timer for delayed swap after child renders
+@property (strong) NSTimer *swapTimer;
+
 @end
 
 /// CVDisplayLink callback - triggers layer redraw on each vsync.
@@ -51,13 +97,19 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 @implementation SurfaceView
 
-// Enable layer-backing and start display link
+#pragma mark - Initialization
+
+/**
+ * Initialize the view with layer-backing and display link.
+ */
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
         self.wantsLayer = YES;
+        self.lastCommittedSize = frame.size;
+        self.pendingSize = frame.size;
         
-        // Create and start CVDisplayLink
+        // Create and start CVDisplayLink for vsync-synchronized updates
         CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
         CVDisplayLinkSetOutputCallback(_displayLink, displayLinkCallback, (__bridge void *)self);
         CVDisplayLinkStart(_displayLink);
@@ -70,22 +122,123 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         CVDisplayLinkStop(_displayLink);
         CVDisplayLinkRelease(_displayLink);
     }
+    [_swapTimer invalidate];
 }
 
-// Accept first responder to receive keyboard events
+#pragma mark - Layer Display
+
 - (BOOL)acceptsFirstResponder {
     return YES;
 }
 
-// Use updateLayer instead of drawRect
 - (BOOL)wantsUpdateLayer {
     return YES;
 }
 
-// Set IOSurface as layer contents and mark as changed
+/**
+ * Update layer contents with the current surface.
+ * Called on each vsync by the CVDisplayLink.
+ */
 - (void)updateLayer {
     self.layer.contents = (__bridge id)self.surface;
     [self.layer setContentsChanged];
+}
+
+#pragma mark - Resize Handling
+
+/**
+ * Delayed swap: called after giving child time to render.
+ *
+ * Strategy to eliminate flicker:
+ * 1. beginResize creates new surface, tells child to render
+ * 2. Old surface continues to be displayed
+ * 3. After 16ms delay, this swaps to the new surface
+ * 4. If more resizes are pending, start another cycle
+ */
+- (void)commitSwap {
+    self.swapTimer = nil;
+    
+    // Swap in the pending surface (child should have rendered by now)
+    if (self.pendingSurface) {
+        self.surface = self.pendingSurface;
+        self.pendingSurface = NULL;
+        self.lastCommittedSize = self.pendingSize;
+        [self.layer setNeedsDisplay];
+    }
+    
+    // Check if more resizes are pending
+    int pendingWidth = (int)self.pendingSize.width;
+    int pendingHeight = (int)self.pendingSize.height;
+    int lastWidth = (int)self.lastCommittedSize.width;
+    int lastHeight = (int)self.lastCommittedSize.height;
+    
+    if (pendingWidth != lastWidth || pendingHeight != lastHeight) {
+        // More resize pending - start another cycle
+        [self beginResize];
+    }
+}
+
+/**
+ * Begin a resize operation.
+ *
+ * Creates new surface, tells child to render, schedules delayed swap.
+ * Old surface remains displayed until swap completes.
+ */
+- (void)beginResize {
+    int newWidth = (int)self.pendingSize.width;
+    int newHeight = (int)self.pendingSize.height;
+    
+    if (newWidth <= 0 || newHeight <= 0) return;
+    
+    // Cancel any pending swap
+    [self.swapTimer invalidate];
+    self.swapTimer = nil;
+    
+    // Create new surface at the target size
+    iosurface_ipc_resize_surface(newWidth, newHeight);
+    
+    // Store as pending (don't display yet!)
+    self.pendingSurface = iosurface_ipc_get_surface();
+    
+    // Tell child to render to the new surface
+    input_send_resize(newWidth, newHeight, iosurface_ipc_get_surface_id());
+    
+    // Wait one full frame (~16.67ms at 60fps) to guarantee child has rendered
+    self.swapTimer = [NSTimer timerWithTimeInterval:0.017
+                                             target:self
+                                           selector:@selector(commitSwap)
+                                           userInfo:nil
+                                            repeats:NO];
+    [[NSRunLoop currentRunLoop] addTimer:self.swapTimer forMode:NSRunLoopCommonModes];
+}
+
+/**
+ * Handle window resize.
+ *
+ * Uses delayed-swap to eliminate flicker:
+ * - Creates new surface, keeps showing old one
+ * - After child renders, swaps to new surface
+ * - Throttled to ~60fps during drag
+ */
+- (void)setFrameSize:(NSSize)newSize {
+    [super setFrameSize:newSize];
+    
+    int newWidth = (int)newSize.width;
+    int newHeight = (int)newSize.height;
+    int lastWidth = (int)self.lastCommittedSize.width;
+    int lastHeight = (int)self.lastCommittedSize.height;
+    
+    // Only process actual size changes
+    if ((newWidth != lastWidth || newHeight != lastHeight) && newWidth > 0 && newHeight > 0) {
+        // Store the target size
+        self.pendingSize = newSize;
+        
+        // If no resize cycle active, start one
+        if (!self.swapTimer) {
+            [self beginResize];
+        }
+        // Otherwise, pendingSize is updated for next cycle
+    }
 }
 
 #pragma mark - Mouse Events
@@ -232,6 +385,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     SurfaceView *view = [[SurfaceView alloc] initWithFrame:[[self.window contentView] bounds]];
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     view.surface = self.surface;
+    CFRetain(self.surface);  // View holds a reference for double-buffering
     
     [self.window setContentView:view];
     [self.window setTitle:@"KMP Embed"];

@@ -31,7 +31,7 @@ void input_send_key(int keyCode, uint32_t codepoint, int pressed, int modifiers)
 
 /* Window events */
 void input_send_focus(int focused);
-void input_send_resize(int width, int height);
+void input_send_resize(int width, int height, uint32_t newSurfaceID);
 
 #ifdef __cplusplus
 }

@@ -14,9 +14,10 @@ import kotlinx.coroutines.*
 import kmpui.input.InputDispatcher
 import kmpui.input.InputEvent
 import kmpui.input.InputReceiver
+import kmpui.input.EventType
 import org.jetbrains.skia.*
 import java.util.concurrent.ConcurrentLinkedQueue
-import kotlin.coroutines.CoroutineContext
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Native Metal library for zero-copy IOSurface rendering.
@@ -39,6 +40,67 @@ private interface MetalRendererLib : Library {
             MetalRendererLib::class.java
         )
     }
+}
+
+/**
+ * Holds the Skia/Metal resources for rendering to an IOSurface.
+ * These need to be recreated when the window resizes.
+ */
+private class RenderResources(
+    val texturePtr: Pointer,
+    val directContext: DirectContext,
+    val skiaSurface: Surface,
+    val width: Int,
+    val height: Int
+) : AutoCloseable {
+    override fun close() {
+        skiaSurface.close()
+        directContext.close()
+        MetalRendererLib.INSTANCE.releaseIOSurfaceTexture(texturePtr)
+    }
+}
+
+/**
+ * Creates RenderResources for a given IOSurface.
+ */
+private fun createRenderResources(
+    metalContext: Pointer,
+    devicePtr: Pointer,
+    queuePtr: Pointer,
+    surfaceID: Int
+): RenderResources {
+    val widthRef = IntByReference()
+    val heightRef = IntByReference()
+    val texturePtr = MetalRendererLib.INSTANCE.createIOSurfaceTexture(
+        metalContext, surfaceID, widthRef, heightRef
+    ) ?: error("Failed to create IOSurface-backed texture for surface ID $surfaceID")
+    
+    val width = widthRef.value
+    val height = heightRef.value
+    println("[GPU] IOSurface texture: ${width}x${height}, ptr=${Pointer.nativeValue(texturePtr)}")
+    
+    // Create Skia DirectContext using our Metal device/queue
+    val directContext = DirectContext.makeMetal(
+        Pointer.nativeValue(devicePtr),
+        Pointer.nativeValue(queuePtr)
+    )
+    
+    // Create BackendRenderTarget wrapping the IOSurface-backed texture
+    val renderTarget = BackendRenderTarget.makeMetal(
+        width, height,
+        Pointer.nativeValue(texturePtr)
+    )
+    
+    // Create Skia Surface from the render target
+    val skiaSurface = Surface.makeFromBackendRenderTarget(
+        directContext,
+        renderTarget,
+        SurfaceOrigin.TOP_LEFT,
+        SurfaceColorFormat.BGRA_8888,
+        ColorSpace.sRGB
+    ) ?: error("Failed to create Skia Surface from BackendRenderTarget")
+    
+    return RenderResources(texturePtr, directContext, skiaSurface, width, height)
 }
 
 /**
@@ -74,140 +136,143 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
         
         println("[GPU] Metal device=${Pointer.nativeValue(devicePtr)}, queue=${Pointer.nativeValue(queuePtr)}")
         
-        // Create IOSurface-backed texture
-        val widthRef = IntByReference()
-        val heightRef = IntByReference()
-        val texturePtr = MetalRendererLib.INSTANCE.createIOSurfaceTexture(
-            metalContext, surfaceID, widthRef, heightRef
-        ) ?: error("Failed to create IOSurface-backed texture for surface ID $surfaceID")
+        // Track if scene needs redraw (atomic for thread safety)
+        val needsRedraw = java.util.concurrent.atomic.AtomicBoolean(true)
         
-        val width = widthRef.value
-        val height = heightRef.value
-        println("[GPU] IOSurface texture: ${width}x${height}, ptr=${Pointer.nativeValue(texturePtr)}")
+        // Pending resize: holds new surface ID when resize is requested
+        val pendingResize = AtomicReference<InputEvent?>(null)
+        
+        // Event queue for input events
+        val eventQueue = ConcurrentLinkedQueue<InputEvent>()
+        
+        // Start input receiver
+        val inputReceiver = InputReceiver { event ->
+            if (event.type == EventType.RESIZE) {
+                // Resize events handled specially - store for main loop
+                println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
+                System.out.flush()
+                pendingResize.set(event)
+            } else {
+                eventQueue.offer(event)
+            }
+            needsRedraw.set(true)
+        }
+        inputReceiver.start()
+        println("[GPU] Input receiver started")
+        
+        // Initial render resources
+        var resources = createRenderResources(metalContext, devicePtr, queuePtr, surfaceID)
+        println("[GPU] Initial resources created: ${resources.width}x${resources.height}")
+        
+        // Create Compose scene
+        var scene = CanvasLayersComposeScene(
+            density = Density(1f),
+            size = IntSize(resources.width, resources.height),
+            coroutineContext = Dispatchers.Unconfined,
+            invalidate = { needsRedraw.set(true) }
+        )
+        scene.setContent(content)
+        println("[GPU] ComposeScene created")
+        
+        // Input dispatcher
+        var inputDispatcher = InputDispatcher(scene)
         
         try {
-            // Create Skia DirectContext using our Metal device/queue
-            val directContext = DirectContext.makeMetal(
-                Pointer.nativeValue(devicePtr),
-                Pointer.nativeValue(queuePtr)
-            )
-            println("[GPU] Skia DirectContext created")
-            
-            try {
-                // Create BackendRenderTarget wrapping the IOSurface-backed texture
-                val renderTarget = BackendRenderTarget.makeMetal(
-                    width, height,
-                    Pointer.nativeValue(texturePtr)
-                )
-                println("[GPU] BackendRenderTarget created")
+            // Render loop - Compose draws directly to IOSurface!
+            runBlocking {
+                val targetFrameTimeNs = 16_666_667L // ~60 FPS (16.67ms)
+                println("[GPU] Starting zero-copy render loop...")
+                System.out.flush()
+                var frameCount = 0
                 
-                // Create Skia Surface from the render target
-                val skiaSurface = Surface.makeFromBackendRenderTarget(
-                    directContext,
-                    renderTarget,
-                    SurfaceOrigin.TOP_LEFT,
-                    SurfaceColorFormat.BGRA_8888,
-                    ColorSpace.sRGB
-                ) ?: error("Failed to create Skia Surface from BackendRenderTarget")
-                println("[GPU] Skia Surface created - zero-copy pipeline ready!")
-                
-                try {
-                    // Track if scene needs redraw (atomic for thread safety)
-                    val needsRedraw = java.util.concurrent.atomic.AtomicBoolean(true)
-                    
-                    // Create Compose scene that will render to our surface
-                    val scene = CanvasLayersComposeScene(
-                        density = Density(1f),
-                        size = IntSize(width, height),
-                        coroutineContext = Dispatchers.Unconfined,
-                        invalidate = { needsRedraw.set(true) }
-                    )
-                    scene.setContent(content)
-                    println("[GPU] ComposeScene created")
-                    
-                    // Set up input handling
-                    val inputDispatcher = InputDispatcher(scene)
-                    val eventQueue = ConcurrentLinkedQueue<InputEvent>()
-                    val inputReceiver = InputReceiver { event ->
-                        eventQueue.offer(event)
-                        needsRedraw.set(true) // Input likely causes visual change
-                    }
-                    inputReceiver.start()
-                    println("[GPU] Input receiver started")
-                    
+                while (true) {
                     try {
-                        // Render loop - Compose draws directly to IOSurface!
-                        runBlocking {
-                            val targetFrameTimeNs = 16_666_667L // ~60 FPS (16.67ms)
-                            println("[GPU] Starting zero-copy render loop...")
-                            System.out.flush()
-                            var frameCount = 0
+                        val frameStart = System.nanoTime()
+                        
+                        // Check for pending resize
+                        val resizeEvent = pendingResize.getAndSet(null)
+                        if (resizeEvent != null) {
+                            val newWidth = resizeEvent.width
+                            val newHeight = resizeEvent.height
+                            val newSurfaceID = resizeEvent.newSurfaceID
+                            println("[GPU] Handling resize: ${newWidth}x${newHeight}, new surface ID=$newSurfaceID")
                             
-                            while (true) {
-                                try {
-                                    val frameStart = System.nanoTime()
-                                    
-                                    // Process pending input events
-                                    while (true) {
-                                        val event = eventQueue.poll() ?: break
-                                        inputDispatcher.dispatch(event)
-                                    }
-                                    
-                                    // Check if scene has pending animations/recompositions
-                                    val hasInvalidations = scene.hasInvalidations()
-                                    
-                                    // Render if invalidated or scene has pending work
-                                    if (needsRedraw.getAndSet(false) || hasInvalidations) {
-                                        
-                                        // Clear and render Compose content directly to IOSurface
-                                        val canvas = skiaSurface.canvas
-                                        canvas.clear(Color.WHITE)
-                                        
-                                        // Render Compose scene directly to the IOSurface-backed canvas!
-                                        scene.render(canvas.asComposeCanvas(), frameStart)
-                                        
-                                        // Flush GPU commands - don't sync to avoid blocking
-                                        skiaSurface.flushAndSubmit(syncCpu = false)
-                                        
-                                        if (frameCount == 0) {
-                                            println("[GPU] First frame rendered - zero-copy active!")
-                                            System.out.flush()
-                                        }
-                                        frameCount++
-                                    }
-                                    
-                                    // Precise frame pacing - sleep for remaining time
-                                    val elapsed = System.nanoTime() - frameStart
-                                    val sleepNs = targetFrameTimeNs - elapsed
-                                    if (sleepNs > 1_000_000) { // Only sleep if > 1ms remaining
-                                        delay(sleepNs / 1_000_000)
-                                    } else if (sleepNs > 0) {
-                                        // Spin-wait for sub-millisecond precision
-                                        while (System.nanoTime() - frameStart < targetFrameTimeNs) {
-                                            Thread.yield()
-                                        }
-                                    }
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    System.err.println("[GPU] Render error: ${e.message}")
-                                    e.printStackTrace()
-                                    delay(100)
-                                }
+                            // Close old scene first (it references the surface)
+                            scene.close()
+                            
+                            // Close old resources
+                            resources.close()
+                            
+                            // Create new resources for the new surface
+                            resources = createRenderResources(metalContext, devicePtr, queuePtr, newSurfaceID)
+                            
+                            // Recreate scene at new size
+                            scene = CanvasLayersComposeScene(
+                                density = Density(1f),
+                                size = IntSize(newWidth, newHeight),
+                                coroutineContext = Dispatchers.Unconfined,
+                                invalidate = { needsRedraw.set(true) }
+                            )
+                            scene.setContent(content)
+                            inputDispatcher = InputDispatcher(scene)
+                            
+                            println("[GPU] Resize complete: ${resources.width}x${resources.height}")
+                            needsRedraw.set(true)
+                        }
+                        
+                        // Process pending input events
+                        while (true) {
+                            val event = eventQueue.poll() ?: break
+                            inputDispatcher.dispatch(event)
+                        }
+                        
+                        // Check if scene has pending animations/recompositions
+                        val hasInvalidations = scene.hasInvalidations()
+                        
+                        // Render if invalidated or scene has pending work
+                        if (needsRedraw.getAndSet(false) || hasInvalidations) {
+                            
+                            // Clear and render Compose content directly to IOSurface
+                            val canvas = resources.skiaSurface.canvas
+                            canvas.clear(Color.WHITE)
+                            
+                            // Render Compose scene directly to the IOSurface-backed canvas!
+                            scene.render(canvas.asComposeCanvas(), frameStart)
+                            
+                            // Flush GPU commands - don't sync to avoid blocking
+                            resources.skiaSurface.flushAndSubmit(syncCpu = false)
+                            
+                            if (frameCount == 0) {
+                                println("[GPU] First frame rendered - zero-copy active!")
+                                System.out.flush()
+                            }
+                            frameCount++
+                        }
+                        
+                        // Precise frame pacing - sleep for remaining time
+                        val elapsed = System.nanoTime() - frameStart
+                        val sleepNs = targetFrameTimeNs - elapsed
+                        if (sleepNs > 1_000_000) { // Only sleep if > 1ms remaining
+                            delay(sleepNs / 1_000_000)
+                        } else if (sleepNs > 0) {
+                            // Spin-wait for sub-millisecond precision
+                            while (System.nanoTime() - frameStart < targetFrameTimeNs) {
+                                Thread.yield()
                             }
                         }
-                    } finally {
-                        inputReceiver.stop()
-                        scene.close()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        System.err.println("[GPU] Render error: ${e.message}")
+                        e.printStackTrace()
+                        delay(100)
                     }
-                } finally {
-                    skiaSurface.close()
                 }
-            } finally {
-                directContext.close()
             }
         } finally {
-            MetalRendererLib.INSTANCE.releaseIOSurfaceTexture(texturePtr)
+            inputReceiver.stop()
+            scene.close()
+            resources.close()
         }
     } finally {
         MetalRendererLib.INSTANCE.destroyMetalContext(metalContext)

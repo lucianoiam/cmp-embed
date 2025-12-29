@@ -51,11 +51,11 @@ data class InputEvent(
     val action: Int,      // Action.*
     val button: Int,      // MouseButton.* for mouse events
     val modifiers: Int,   // Modifiers bitmask
-    val x: Int,           // Mouse X or key code
-    val y: Int,           // Mouse Y
+    val x: Int,           // Mouse X or key code or width
+    val y: Int,           // Mouse Y or height
     val data1: Int,       // Scroll X (*100) or codepoint low
     val data2: Int,       // Scroll Y (*100) or codepoint high
-    val timestamp: Long   // Milliseconds since process start
+    val timestamp: Long   // Milliseconds or new surface ID for RESIZE
 ) {
     /** For scroll events, get the scroll delta X (0.01 precision) */
     val scrollX: Float get() = data1 / 100f
@@ -71,4 +71,13 @@ data class InputEvent(
         val cp = codepoint
         return if (cp in 0x20..0xFFFF) cp.toChar() else null
     }
+    
+    /** For resize events, get the new width */
+    val width: Int get() = x
+    
+    /** For resize events, get the new height */
+    val height: Int get() = y
+    
+    /** For resize events, get the new IOSurface ID */
+    val newSurfaceID: Int get() = timestamp.toInt()
 }

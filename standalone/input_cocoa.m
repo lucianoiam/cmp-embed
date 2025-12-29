@@ -134,7 +134,11 @@ void input_send_focus(int focused) {
     send_event(&event);
 }
 
-void input_send_resize(int width, int height) {
+void input_send_resize(int width, int height, uint32_t newSurfaceID) {
+    // Note: For resize events, we manually set timestamp to the new surface ID
+    // and skip send_event() since it would overwrite timestamp with current time
+    if (!g_input_pipe) return;
+    
     InputEvent event = {
         .type = INPUT_EVENT_RESIZE,
         .action = 0,
@@ -143,7 +147,15 @@ void input_send_resize(int width, int height) {
         .x = (int16_t)width,
         .y = (int16_t)height,
         .data1 = 0,
-        .data2 = 0
+        .data2 = 0,
+        .timestamp = newSurfaceID  // This holds the new surface ID for resize events
     };
-    send_event(&event);
+    
+    NSData *data = [NSData dataWithBytes:&event length:sizeof(InputEvent)];
+    @try {
+        [g_input_pipe writeData:data];
+        NSLog(@"Input: Sent resize event %dx%d with surface ID %u", width, height, newSurfaceID);
+    } @catch (NSException *e) {
+        g_input_pipe = nil;
+    }
 }

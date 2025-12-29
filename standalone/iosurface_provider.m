@@ -40,6 +40,37 @@ uint32_t iosurface_ipc_get_surface_id(void) {
     return g_surface ? IOSurfaceGetID(g_surface) : 0;
 }
 
+/**
+ * Create a new IOSurface at the given dimensions.
+ *
+ * This is used during resize for double-buffering. The caller (SurfaceView)
+ * manages the transition from old to new surface:
+ * 1. Call this to create new surface
+ * 2. Tell child to render to new surface
+ * 3. Wait for child to render
+ * 4. Swap display to new surface
+ * 5. Release old surface
+ *
+ * Note: This does NOT release the old surface - caller must manage that
+ * for proper double-buffering.
+ *
+ * @param width  New width in pixels
+ * @param height New height in pixels
+ */
+void iosurface_ipc_resize_surface(int width, int height) {
+    // Create new surface at new size (old surface is managed by SurfaceView)
+    NSDictionary *props = @{
+        (id)kIOSurfaceWidth: @(width),
+        (id)kIOSurfaceHeight: @(height),
+        (id)kIOSurfaceBytesPerElement: @4,
+        (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
+        (id)kIOSurfaceIsGlobal: @YES
+    };
+    g_surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+    
+    NSLog(@"IPC: Created new surface %dx%d, ID=%u", width, height, IOSurfaceGetID(g_surface));
+}
+
 /// Launch child process with --embed and --iosurface-id=<id> arguments.
 /// Sets up stdin pipe for input forwarding.
 void iosurface_ipc_launch_child(const char *executable, const char *const *args, const char *workingDir) {
