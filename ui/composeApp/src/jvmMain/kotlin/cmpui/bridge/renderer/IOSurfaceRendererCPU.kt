@@ -1,11 +1,11 @@
-package cmpui.renderer
+package cmpui.bridge.renderer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.*
-import cmpui.input.EventType
-import cmpui.input.InputReceiver
+import cmpui.bridge.input.EventType
+import cmpui.bridge.input.InputReceiver
 import org.jetbrains.skia.*
 
 /**

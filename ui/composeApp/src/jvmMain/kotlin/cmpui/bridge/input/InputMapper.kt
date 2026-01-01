@@ -1,4 +1,4 @@
-package cmpui.input
+package cmpui.bridge.input
 
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerButtons

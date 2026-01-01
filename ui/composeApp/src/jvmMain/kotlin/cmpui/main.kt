@@ -2,7 +2,7 @@ package cmpui
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import cmpui.renderer.runIOSurfaceRenderer
+import cmpui.bridge.renderer.runIOSurfaceRenderer
 
 /**
  * Application entry point.

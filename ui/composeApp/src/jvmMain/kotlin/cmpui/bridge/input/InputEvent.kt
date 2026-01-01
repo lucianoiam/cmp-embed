@@ -1,4 +1,4 @@
-package cmpui.input
+package cmpui.bridge.input
 
 /**
  * Input event types and data classes matching common/input_protocol.h
