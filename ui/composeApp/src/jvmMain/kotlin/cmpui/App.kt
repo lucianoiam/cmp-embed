@@ -6,8 +6,10 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -17,11 +19,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 import cmpui.composeapp.generated.resources.Res
 import cmpui.composeapp.generated.resources.compose_multiplatform
+import cmpui.widgets.Knob
 
 @Composable
 @Preview
@@ -54,6 +58,20 @@ fun App() {
             ) {
                 Text("Click me!")
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Knob demo
+            var dialValue by remember { mutableStateOf(0.5f) }
+            Knob(
+                value = dialValue,
+                onValueChange = { dialValue = it }
+            )
+            Text(
+                text = "Value: ${(dialValue * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall
+            )
+            
             AnimatedVisibility(showContent) {
                 val greeting = remember { Greeting().greet() }
                 Column(
