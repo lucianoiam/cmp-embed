@@ -67,11 +67,14 @@ static int getModifiers(NSEventModifierFlags flags) {
 /// New surface being rendered to (not yet displayed)
 @property (assign) IOSurfaceRef pendingSurface;
 
-/// Size of the pending surface (target size during resize)
+/// Size of the pending surface (target size during resize) - in points
 @property (assign) NSSize pendingSize;
 
-/// Size of the currently displayed surface
+/// Size of the currently displayed surface - in points
 @property (assign) NSSize lastCommittedSize;
+
+/// Backing scale factor (e.g., 2.0 for Retina)
+@property (assign) CGFloat backingScale;
 
 /// Vsync-synchronized display refresh
 @property (assign) CVDisplayLinkRef displayLink;
@@ -109,6 +112,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         self.wantsLayer = YES;
         self.lastCommittedSize = frame.size;
         self.pendingSize = frame.size;
+        self.backingScale = 1.0;  // Will be updated when added to window
         
         // Pin content to top-left, no stretching during resize
         self.layer.contentsGravity = kCAGravityTopLeft;
@@ -145,8 +149,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
  */
 - (void)updateLayer {
     self.layer.contents = (__bridge id)self.surface;
-    // Display surface pixels 1:1 as points
-    self.layer.contentsScale = 1.0;
+    // Scale surface pixels to match display (e.g., 2.0 for Retina)
+    self.layer.contentsScale = self.backingScale;
     [self.layer setContentsChanged];
 }
 
@@ -176,9 +180,17 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     
     [self.swapTimer invalidate];
     
-    iosurface_ipc_resize_surface(w, h);
+    // Get backing scale factor from window (e.g., 2.0 for Retina)
+    CGFloat scale = self.window.backingScaleFactor ?: 1.0;
+    self.backingScale = scale;
+    
+    // Create surface at pixel dimensions (points * scale)
+    int pixelW = (int)(w * scale);
+    int pixelH = (int)(h * scale);
+    
+    iosurface_ipc_resize_surface(pixelW, pixelH);
     self.pendingSurface = iosurface_ipc_get_surface();
-    input_send_resize(w, h, iosurface_ipc_get_surface_id());
+    input_send_resize(pixelW, pixelH, scale, iosurface_ipc_get_surface_id());
     
     // Swap after one frame (17ms) so child has time to render.
     // For truly fast resize, you'd need signal-based coordination where
@@ -309,9 +321,13 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
                                                 backing:NSBackingStoreBuffered
                                                   defer:NO];
     
-    // Create IOSurface at point dimensions.
-    // The child process determines how to render (at what density).
-    iosurface_ipc_create_surface(800, 600);
+    // Get backing scale factor (e.g., 2.0 for Retina displays)
+    CGFloat scale = self.window.backingScaleFactor;
+    int pixelW = (int)(800 * scale);
+    int pixelH = (int)(600 * scale);
+    
+    // Create IOSurface at pixel dimensions for Retina support
+    iosurface_ipc_create_surface(pixelW, pixelH);
     self.surface = iosurface_ipc_get_surface();
     
     // Draw "Starting child process..." on dark background
@@ -350,6 +366,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     // Don't auto-resize the view - IOSurface stays at fixed size
     view.autoresizingMask = 0;
     view.surface = self.surface;
+    view.backingScale = scale;  // Pass scale factor for contentsScale
     CFRetain(self.surface);  // View holds a reference for double-buffering
     
     [self.window setContentView:view];
@@ -365,13 +382,12 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
     
     // Launch renderer as child process (inherits mach port)
-    // Use the native distributable for direct child process launch
-    // Get path relative to host executable: host/build/cmp-host.app/Contents/MacOS/cmp-host
-    // CMP UI is at: ui/composeApp/build/compose/binaries/main/app/cmpui.app/Contents/MacOS/cmpui
+    // Pass scale factor so child uses correct density
     NSString *execPath = [[NSBundle mainBundle] executablePath];
     NSString *projectRoot = [[[[[[execPath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
     NSString *rendererApp = [projectRoot stringByAppendingPathComponent:@"ui/composeApp/build/compose/binaries/main/app/cmpui.app/Contents/MacOS/cmpui"];
-    const char *args[] = { "--embed", NULL };
+    NSString *scaleArg = [NSString stringWithFormat:@"--scale=%.2f", scale];
+    const char *args[] = { "--embed", [scaleArg UTF8String], NULL };
     iosurface_ipc_launch_child([rendererApp UTF8String], args, NULL);
 }
 

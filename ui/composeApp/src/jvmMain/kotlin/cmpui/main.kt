@@ -32,11 +32,18 @@ fun main(args: Array<String>) {
             ?.toIntOrNull()
             ?: error("Missing --iosurface-id=<id> argument")
         
+        // Parse --scale=<factor> for Retina support (e.g., 2.0)
+        val scaleFactor = args
+            .firstOrNull { it.startsWith("--scale=") }
+            ?.substringAfter("=")
+            ?.toFloatOrNull()
+            ?: 1f
+        
         // --disable-gpu forces CPU rendering (for debugging)
         val disableGpu = args.contains("--disable-gpu")
         
         // Start rendering to the shared IOSurface
-        runIOSurfaceRenderer(surfaceID, disableGpu) {
+        runIOSurfaceRenderer(surfaceID, scaleFactor, disableGpu) {
             App()
         }
     } else {

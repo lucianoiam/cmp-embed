@@ -10,9 +10,13 @@ import androidx.compose.ui.scene.ComposeScene
  * 
  * This bridges the InputReceiver (reading from stdin) to Compose's event system.
  * Runs on the main/render thread to ensure thread safety with Compose.
+ * 
+ * @param scene The ComposeScene to dispatch events to
+ * @param scaleFactor The display scale factor (e.g., 2.0 for Retina). Input coordinates
+ *                    from the host are in points; we scale them to pixels for Compose.
  */
 @OptIn(InternalComposeUiApi::class)
-class InputDispatcher(private val scene: ComposeScene) {
+class InputDispatcher(private val scene: ComposeScene, var scaleFactor: Float = 1f) {
     
     private var lastPosition = Offset.Zero
     private var pressedButtons = mutableSetOf<Int>()
@@ -32,7 +36,8 @@ class InputDispatcher(private val scene: ComposeScene) {
     }
     
     private fun dispatchMouseEvent(event: InputEvent) {
-        val position = Offset(event.x.toFloat(), event.y.toFloat())
+        // Scale from points (host coordinates) to pixels (Compose coordinates)
+        val position = Offset(event.x.toFloat() * scaleFactor, event.y.toFloat() * scaleFactor)
         lastPosition = position
         
         val eventType = when (event.action) {

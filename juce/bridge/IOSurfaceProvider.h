@@ -46,8 +46,8 @@ public:
     int getWidth() const;
     int getHeight() const;
 
-    /** Launch the child Compose UI process. */
-    bool launchChild(const std::string& executable, const std::string& workingDir = "");
+    /** Launch the child Compose UI process with scale factor for Retina support. */
+    bool launchChild(const std::string& executable, float scale = 1.0f, const std::string& workingDir = "");
 
     /** Stop the child process. */
     void stopChild();

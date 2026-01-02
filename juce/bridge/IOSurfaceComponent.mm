@@ -52,11 +52,14 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 /// New surface being rendered to (not yet displayed)
 @property (nonatomic, assign) IOSurfaceRef pendingSurface;
 
-/// Size of the pending surface (target size during resize)
+/// Size of the pending surface (target size during resize) - in points
 @property (nonatomic, assign) NSSize pendingSize;
 
-/// Size of the currently displayed surface
+/// Size of the currently displayed surface - in points
 @property (nonatomic, assign) NSSize lastCommittedSize;
+
+/// Backing scale factor (e.g., 2.0 for Retina)
+@property (nonatomic, assign) CGFloat backingScale;
 
 /// Vsync-synchronized display refresh
 @property (nonatomic, assign) CVDisplayLinkRef displayLink;
@@ -80,6 +83,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         self.wantsLayer = YES;
         self.lastCommittedSize = frame.size;
         self.pendingSize = frame.size;
+        self.backingScale = 1.0;  // Will be updated when added to window
         // Pin content to top-left, no stretching during resize
         self.layer.contentsGravity = kCAGravityTopLeft;
         
@@ -107,15 +111,17 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 - (void)updateLayer {
     if (self.surface) {
         self.layer.contents = (__bridge id)self.surface;
-        // Display surface pixels 1:1 as points
-        self.layer.contentsScale = 1.0;
+        // Scale surface pixels to match display (e.g., 2.0 for Retina)
+        self.layer.contentsScale = self.backingScale;
         [self.layer setContentsChanged];
     }
 }
 
 - (void)setSurface:(IOSurfaceRef)surface {
     _surface = surface;
-    self.lastCommittedSize = NSMakeSize(IOSurfaceGetWidth(surface), IOSurfaceGetHeight(surface));
+    // lastCommittedSize is in points, not pixels
+    CGFloat scale = self.backingScale > 0 ? self.backingScale : 1.0;
+    self.lastCommittedSize = NSMakeSize(IOSurfaceGetWidth(surface) / scale, IOSurfaceGetHeight(surface) / scale);
     [self.layer setNeedsDisplay];
 }
 
@@ -266,8 +272,25 @@ void IOSurfaceComponent::launchChildProcess()
     if (childLaunched) return;
     auto bounds = getLocalBounds();
     if (bounds.isEmpty()) return;
+    
+    // Get backing scale factor from the native window (e.g., 2.0 for Retina)
+    float scale = 1.0f;
+#if JUCE_MAC
+    if (auto* peer = getPeer()) {
+        if (NSView* peerView = (NSView*)peer->getNativeHandle()) {
+            if (NSWindow* window = peerView.window) {
+                scale = (float)window.backingScaleFactor;
+            }
+        }
+    }
+#endif
+    backingScaleFactor = scale;
+    
+    // Create surface at pixel dimensions (points * scale)
+    int pixelW = (int)(bounds.getWidth() * scale);
+    int pixelH = (int)(bounds.getHeight() * scale);
 
-    if (!surfaceProvider.createSurface(bounds.getWidth(), bounds.getHeight()))
+    if (!surfaceProvider.createSurface(pixelW, pixelH))
         return;
 
     // Find the Compose UI app relative to this executable.
@@ -291,7 +314,7 @@ void IOSurfaceComponent::launchChildProcess()
     if (!rendererPath.existsAsFile())
         return;
 
-    if (surfaceProvider.launchChild(rendererPath.getFullPathName().toStdString()))
+    if (surfaceProvider.launchChild(rendererPath.getFullPathName().toStdString(), backingScaleFactor))
     {
         inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
         
@@ -339,16 +362,22 @@ void IOSurfaceComponent::attachNativeView()
         SurfaceView* view = [[SurfaceView alloc] initWithFrame:NSZeroRect];
         nativeView = (__bridge_retained void*)view;
         view.surface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
+        view.backingScale = backingScaleFactor;
         
         // Set up resize callback - this is called from SurfaceView.beginResize
         IOSurfaceProvider* provider = &surfaceProvider;
         InputSender* sender = &inputSender;
+        float* scalePtr = &backingScaleFactor;
         view.resizeCallback = ^(NSSize size, void (^setPendingSurface)(IOSurfaceRef)) {
-            // Create new pending surface
-            uint32_t newSurfaceID = provider->resizeSurface((int)size.width, (int)size.height);
+            // Get current scale factor
+            float scale = *scalePtr;
+            // Create new pending surface at pixel dimensions
+            int pixelW = (int)(size.width * scale);
+            int pixelH = (int)(size.height * scale);
+            uint32_t newSurfaceID = provider->resizeSurface(pixelW, pixelH);
             if (newSurfaceID != 0) {
                 setPendingSurface((IOSurfaceRef)provider->getPendingSurface());
-                sender->sendResize((int)size.width, (int)size.height, newSurfaceID);
+                sender->sendResize(pixelW, pixelH, scale, newSurfaceID);
             }
         };
         

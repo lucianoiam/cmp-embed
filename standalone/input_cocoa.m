@@ -134,7 +134,7 @@ void input_send_focus(int focused) {
     send_event(&event);
 }
 
-void input_send_resize(int width, int height, uint32_t newSurfaceID) {
+void input_send_resize(int width, int height, float scale, uint32_t newSurfaceID) {
     // Note: For resize events, we manually set timestamp to the new surface ID
     // and skip send_event() since it would overwrite timestamp with current time
     if (!g_input_pipe) return;
@@ -146,7 +146,7 @@ void input_send_resize(int width, int height, uint32_t newSurfaceID) {
         .modifiers = 0,
         .x = (int16_t)width,
         .y = (int16_t)height,
-        .data1 = 0,
+        .data1 = (int16_t)(scale * 100),  // Scale factor as fixed-point (200 = 2.0x)
         .data2 = 0,
         .timestamp = newSurfaceID  // This holds the new surface ID for resize events
     };

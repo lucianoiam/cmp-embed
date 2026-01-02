@@ -68,7 +68,9 @@ extern "C" {
  *
  * FOCUS: data1 = 1 if focused, 0 if unfocused
  *
- * RESIZE: x = new width, y = new height, timestamp = new IOSurface ID
+ * RESIZE: x = new width (pixels), y = new height (pixels),
+ *         data1 = scale factor * 100 (e.g., 200 = 2.0x Retina),
+ *         timestamp = new IOSurface ID
  */
 #pragma pack(push, 1)
 typedef struct {

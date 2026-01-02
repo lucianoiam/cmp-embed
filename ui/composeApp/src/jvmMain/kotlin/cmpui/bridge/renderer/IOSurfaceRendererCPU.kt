@@ -20,8 +20,8 @@ import org.jetbrains.skia.*
  *
  * Enable with --disable-gpu flag.
  */
-fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
-    println("[CPU] Looking up IOSurface ID $surfaceID...")
+fun runIOSurfaceRendererCPU(surfaceID: Int, scaleFactor: Float = 1f, content: @Composable () -> Unit) {
+    println("[CPU] Looking up IOSurface ID $surfaceID (scale=$scaleFactor)...")
     println("[CPU] WARNING: CPU renderer does not support window resizing!")
     
     // Look up the IOSurface created by the host
@@ -48,10 +48,11 @@ fun runIOSurfaceRendererCPU(surfaceID: Int, content: @Composable () -> Unit) {
     val imageInfo = ImageInfo.makeN32Premul(width, height)
     
     // Offscreen Compose scene - renders to an Image
+    // Use scaleFactor for proper Retina/HiDPI rendering
     val scene = ImageComposeScene(
         width = width,
         height = height,
-        density = Density(1f),
+        density = Density(scaleFactor),
         content = content
     )
 

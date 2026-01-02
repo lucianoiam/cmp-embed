@@ -124,12 +124,13 @@ void InputSender::sendFocus(bool focused)
     sendEvent(event);
 }
 
-void InputSender::sendResize(int width, int height, uint32_t newSurfaceID)
+void InputSender::sendResize(int width, int height, float scale, uint32_t newSurfaceID)
 {
     InputEvent event = {};
     event.type = INPUT_EVENT_RESIZE;
     event.x = static_cast<int16_t>(width);
     event.y = static_cast<int16_t>(height);
+    event.data1 = static_cast<int16_t>(scale * 100);  // Scale factor as fixed-point
     event.timestamp = newSurfaceID;  // Overwritten by sendEvent, so set directly
     
     if (pipeFD < 0) return;

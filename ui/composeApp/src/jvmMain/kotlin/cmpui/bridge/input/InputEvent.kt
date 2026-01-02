@@ -78,6 +78,9 @@ data class InputEvent(
     /** For resize events, get the new height */
     val height: Int get() = y
     
+    /** For resize events, get the scale factor (e.g., 2.0 for Retina) */
+    val scaleFactor: Float get() = if (data1 > 0) data1 / 100f else 1f
+    
     /** For resize events, get the new IOSurface ID */
     val newSurfaceID: Int get() = timestamp.toInt()
 }

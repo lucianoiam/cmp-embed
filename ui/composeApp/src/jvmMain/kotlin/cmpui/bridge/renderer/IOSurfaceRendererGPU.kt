@@ -120,8 +120,8 @@ private fun createRenderResources(
  * 6. GPU work goes directly to the IOSurface - host sees it immediately!
  */
 @OptIn(InternalComposeUiApi::class)
-fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
-    println("[GPU] Initializing zero-copy Metal renderer...")
+fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @Composable () -> Unit) {
+    println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
     
     // Create Metal context (device + command queue)
     val metalContext = MetalRendererLib.INSTANCE.createMetalContext()
@@ -164,9 +164,13 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
         var resources = createRenderResources(metalContext, devicePtr, queuePtr, surfaceID)
         println("[GPU] Initial resources created: ${resources.width}x${resources.height}")
         
-        // Create Compose scene
+        // Track current scale factor (may change on resize if window moves to different display)
+        var currentScale = scaleFactor
+        
+        // Create Compose scene - use scaleFactor for proper Retina/HiDPI rendering
+        // The scene size is in PIXELS, while Density tells Compose how to map dp to pixels
         var scene = CanvasLayersComposeScene(
-            density = Density(1f),
+            density = Density(currentScale),
             size = IntSize(resources.width, resources.height),
             coroutineContext = Dispatchers.Unconfined,
             invalidate = { needsRedraw.set(true) }
@@ -174,8 +178,8 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
         scene.setContent(content)
         println("[GPU] ComposeScene created")
         
-        // Input dispatcher
-        var inputDispatcher = InputDispatcher(scene)
+        // Input dispatcher - needs scale factor to convert host points to Compose pixels
+        var inputDispatcher = InputDispatcher(scene, currentScale)
         
         try {
             // Render loop - Compose draws directly to IOSurface!
@@ -194,7 +198,8 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                             val newWidth = resizeEvent.width
                             val newHeight = resizeEvent.height
                             val newSurfaceID = resizeEvent.newSurfaceID
-                            println("[GPU] Handling resize: ${newWidth}x${newHeight}, new surface ID=$newSurfaceID")
+                            val newScale = resizeEvent.scaleFactor
+                            println("[GPU] Handling resize: ${newWidth}x${newHeight}, scale=$newScale, new surface ID=$newSurfaceID")
                             
                             // Close old resources (but keep the scene!)
                             resources.close()
@@ -204,6 +209,26 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                             
                             // Update scene size - preserves all Compose state!
                             scene.size = IntSize(newWidth, newHeight)
+                            
+                            // Update density if scale factor changed (e.g., window moved to different display)
+                            if (newScale != currentScale) {
+                                println("[GPU] Scale factor changed: $currentScale -> $newScale")
+                                currentScale = newScale
+                                // Recreate scene with new density to handle scale change
+                                scene.close()
+                                scene = CanvasLayersComposeScene(
+                                    density = Density(currentScale),
+                                    size = IntSize(newWidth, newHeight),
+                                    coroutineContext = Dispatchers.Unconfined,
+                                    invalidate = { needsRedraw.set(true) }
+                                )
+                                scene.setContent(content)
+                                inputDispatcher = InputDispatcher(scene, currentScale)
+                            } else {
+                                // Scale unchanged, just update dispatcher's reference to new scene
+                                // (scene wasn't recreated, but update scale in case)
+                                inputDispatcher.scaleFactor = currentScale
+                            }
                             
                             println("[GPU] Resize complete: ${resources.width}x${resources.height}")
                             needsRedraw.set(true)

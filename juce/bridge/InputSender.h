@@ -34,7 +34,7 @@ public:
 
     // Window events
     void sendFocus(bool focused);
-    void sendResize(int width, int height, uint32_t newSurfaceID);
+    void sendResize(int width, int height, float scale, uint32_t newSurfaceID);
 
 private:
     void sendEvent(InputEvent& event);

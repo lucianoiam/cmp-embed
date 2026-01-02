@@ -146,7 +146,7 @@ public:
     int getWidth() const { return surfaceWidth; }
     int getHeight() const { return surfaceHeight; }
 
-    bool launchChild(const juce::String& executable, const juce::String& workingDir)
+    bool launchChild(const juce::String& executable, float scale, const juce::String& workingDir)
     {
 #if JUCE_MAC
         if (surface == nullptr)
@@ -190,6 +190,7 @@ public:
             return false;
         }
         std::string ipcArg = "--ipc-pipe=" + ipcFifoPath;
+        std::string scaleArg = "--scale=" + std::to_string(scale);
 
         childPid = fork();
         
@@ -209,6 +210,7 @@ public:
                   "--embed", 
                   surfaceArg.c_str(), 
                   ipcArg.c_str(),
+                  scaleArg.c_str(),
                   nullptr);
             
             // If exec fails, exit child
@@ -373,9 +375,9 @@ int IOSurfaceProvider::getHeight() const
     return pImpl->getHeight(); 
 }
 
-bool IOSurfaceProvider::launchChild(const std::string& executable, const std::string& workingDir) 
+bool IOSurfaceProvider::launchChild(const std::string& executable, float scale, const std::string& workingDir) 
 { 
-    return pImpl->launchChild(juce::String(executable), juce::String(workingDir)); 
+    return pImpl->launchChild(juce::String(executable), scale, juce::String(workingDir)); 
 }
 
 void IOSurfaceProvider::stopChild() 

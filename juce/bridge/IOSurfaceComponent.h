@@ -61,6 +61,7 @@ private:
     SetParamCallback setParamCallback;
 
     bool childLaunched = false;
+    float backingScaleFactor = 1.0f;  // e.g., 2.0 for Retina displays
 
 #if JUCE_MAC
     void* nativeView = nullptr;  // SurfaceView for displaying IOSurface
