@@ -240,38 +240,22 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                             inputDispatcher.dispatch(event)
                         }
                         
-                        // Check if scene has pending animations/recompositions
-                        val hasInvalidations = scene.hasInvalidations()
+                        // Render Compose content to IOSurface
+                        val canvas = resources.skiaSurface.canvas
+                        canvas.clear(Color.WHITE)
+                        scene.render(canvas.asComposeCanvas(), frameStart)
                         
-                        // Render if invalidated or scene has pending work
-                        if (needsRedraw.getAndSet(false) || hasInvalidations) {
-                            
-                            // Clear and render Compose content directly to IOSurface
-                            val canvas = resources.skiaSurface.canvas
-                            canvas.clear(Color.WHITE)
-                            
-                            // Render Compose scene directly to the IOSurface-backed canvas!
-                            scene.render(canvas.asComposeCanvas(), frameStart)
-                            
-                            // Flush GPU commands - don't sync to avoid blocking
-                            resources.skiaSurface.flushAndSubmit(syncCpu = false)
-                            
-                            if (frameCount == 0) {
-                                println("[GPU] First frame rendered - zero-copy active!")
-                                System.out.flush()
-                            }
-                            frameCount++
-                            
-                            // After rendering, sleep until next frame
-                            val elapsed = System.nanoTime() - frameStart
-                            val sleepMs = (16_666_667L - elapsed) / 1_000_000
-                            if (sleepMs > 0) {
-                                delay(sleepMs)
-                            }
-                        } else {
-                            // Idle - sleep longer to save CPU, wake on invalidation
-                            delay(16)
+                        // Flush and SYNC - this waits for GPU to finish, which naturally
+                        // throttles to display refresh rate via Metal's backpressure.
+                        // No artificial delays needed - GPU presentation timing handles it.
+                        resources.skiaSurface.flushAndSubmit(syncCpu = true)
+                        
+                        if (frameCount == 0) {
+                            println("[GPU] First frame rendered - zero-copy active!")
+                            System.out.flush()
                         }
+                        frameCount++
+                        needsRedraw.set(false)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
