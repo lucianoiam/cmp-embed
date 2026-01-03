@@ -3,7 +3,7 @@ juce-cmp - Proposed Enhancements
 
 INPUT ENHANCEMENTS
 ------------------
-[ ] Mouse cursor changes (pointer, hand, text) - Compose requests cursor styles, forward back to standalone
+[ ] Mouse cursor changes (pointer, hand, text) - Compose requests cursor styles, forward back to host
 [ ] Drag and drop support
 [ ] Text input / IME for international keyboards
 [ ] Touch/trackpad gestures (pinch, rotate)
@@ -11,12 +11,12 @@ INPUT ENHANCEMENTS
 RENDERING
 ---------
 [x] Window resize handling - recreate IOSurface at new size
-[ ] HiDPI/Retina support - pass scale factor, render at 2x
+[x] HiDPI/Retina support - pass scale factor, render at 2x
 [ ] Triple buffering to eliminate any remaining tearing
 
 ARCHITECTURE
 ------------
-[ ] Bidirectional IPC - let Compose send messages back (cursor, clipboard, window title)
+[x] Bidirectional IPC - UI sends messages back (setParameter working)
 [ ] Shared memory ring buffer instead of pipe for lower latency
 [ ] Extract embedding as a library/framework others can use
 
@@ -24,11 +24,11 @@ PLATFORM EXPANSION
 ------------------
 [ ] Windows standalone (Win32 + shared texture via D3D/Vulkan)
 [ ] Linux/X11 or Wayland support
-[ ] JUCE plugin wrapper for audio apps
+[x] JUCE plugin wrapper for audio apps (AU plugin builds)
 
 DEVELOPER EXPERIENCE
 --------------------
-[ ] Hot reload in embedded mode (currently only standalone CMP has it)
+[ ] Hot reload in embedded mode (currently only standalone Compose UI has it)
 [ ] Debug overlay showing frame times
 [ ] Example with more complex UI (lists, text fields, navigation)
 
