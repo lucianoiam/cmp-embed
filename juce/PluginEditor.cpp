@@ -5,6 +5,7 @@
  * view covers it with the child process rendering.
  */
 #include "PluginEditor.h"
+#include "LoadingPreview.h"
 
 PluginEditor::PluginEditor(PluginProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
@@ -12,6 +13,9 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     setSize(800, 600);
     setResizable(true, true);
     setResizeLimits(400, 300, 2048, 2048);
+    
+    // Load the preview image from embedded data
+    loadingPreviewImage = juce::ImageFileFormat::loadFrom(loading_preview_png, loading_preview_png_len);
     
     // Wire up UI→Host parameter changes
     surfaceComponent.onSetParameter([&p](uint32_t paramId, float value) {
@@ -30,12 +34,42 @@ PluginEditor::~PluginEditor()
 
 void PluginEditor::paint(juce::Graphics& g)
 {
-    // Standard JUCE boilerplate style - will be obscured by IOSurfaceComponent
-    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
+    // Light purple background matching the Compose UI
+    g.fillAll(juce::Colour(0xFFE6D6F2));
     
-    g.setColour(juce::Colours::white);
+    // Draw the loading preview image scaled to fit
+    if (loadingPreviewImage.isValid())
+    {
+        // Scale image to fit while maintaining aspect ratio
+        float imageAspect = (float)loadingPreviewImage.getWidth() / loadingPreviewImage.getHeight();
+        float boundsAspect = (float)getWidth() / getHeight();
+        
+        int drawWidth, drawHeight, drawX, drawY;
+        if (imageAspect > boundsAspect)
+        {
+            // Image is wider - fit to width
+            drawWidth = getWidth();
+            drawHeight = (int)(getWidth() / imageAspect);
+            drawX = 0;
+            drawY = (getHeight() - drawHeight) / 2;
+        }
+        else
+        {
+            // Image is taller - fit to height
+            drawHeight = getHeight();
+            drawWidth = (int)(getHeight() * imageAspect);
+            drawX = (getWidth() - drawWidth) / 2;
+            drawY = 0;
+        }
+        
+        g.drawImage(loadingPreviewImage, drawX, drawY, drawWidth, drawHeight,
+                    0, 0, loadingPreviewImage.getWidth(), loadingPreviewImage.getHeight());
+    }
+    
+    // Draw loading text centered on top of the image
+    g.setColour(juce::Colours::black);
     g.setFont(juce::FontOptions(15.0f));
-    g.drawFittedText("Starting child process...", getLocalBounds(), juce::Justification::centred, 1);
+    g.drawFittedText("Starting UI...", getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void PluginEditor::resized()
