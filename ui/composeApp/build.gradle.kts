@@ -42,8 +42,5 @@ compose.desktop {
             packageName = "cmpui"
             packageVersion = "1.0.0"
         }
-        
-        // Set JNA library path to find libiosurface_ipc.dylib
-        jvmArgs("-Djna.library.path=${project.rootDir.parentFile}/lib")
     }
 }

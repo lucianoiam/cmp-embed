@@ -35,10 +35,11 @@ private interface MetalRendererLib : Library {
     fun flushAndSync(context: Pointer)
 
     companion object {
-        val INSTANCE: MetalRendererLib = Native.load(
-            "iosurface_renderer",
-            MetalRendererLib::class.java
-        )
+        val INSTANCE: MetalRendererLib by lazy {
+            // Extract native library from JAR resources at runtime
+            val libFile = Native.extractFromResourcePath("iosurface_renderer")
+            Native.load(libFile.absolutePath, MetalRendererLib::class.java)
+        }
     }
 }
 
