@@ -1,5 +1,5 @@
 /**
- * PluginProcessor - Passthrough audio processor for CMP Embed.
+ * PluginProcessor - Passthrough audio processor for juce-cmp.
  *
  * This processor does nothing to the audio - it exists purely to provide
  * a standard JUCE plugin structure. All functionality is in the editor.

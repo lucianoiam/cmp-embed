@@ -1,4 +1,4 @@
-CMP Embed - Proposed Enhancements
+juce-cmp - Proposed Enhancements
 ==================================
 
 INPUT ENHANCEMENTS

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Install script for CMP Embed AU plugin
+# Install script for juce-cmp AU plugin
 # Copies the AU plugin to ~/Library/Audio/Plug-Ins/Components/
 set -e
 cd "$(dirname "$0")/.."
 
-AU_SRC="build/juce/CMPEmbedHost_artefacts/AU/CMP Embed.component"
-AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/CMP Embed.component"
+AU_SRC="build/juce/juce-cmp_artefacts/AU/juce-cmp.component"
+AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/juce-cmp.component"
 
 if [ ! -d "$AU_SRC" ]; then
     echo "Error: AU plugin not found at $AU_SRC"
@@ -13,7 +13,7 @@ if [ ! -d "$AU_SRC" ]; then
     exit 1
 fi
 
-echo "=== Installing CMP Embed AU Plugin ==="
+echo "=== Installing juce-cmp AU Plugin ==="
 
 # Remove old version if exists
 if [ -d "$AU_DEST" ]; then
@@ -31,5 +31,5 @@ killall -9 AudioComponentRegistrar 2>/dev/null || true
 
 echo "=== Installation complete ==="
 echo ""
-echo "Restart your DAW and rescan plugins to use CMP Embed."
+echo "Restart your DAW and rescan plugins to use juce-cmp."
 echo "To validate: auval -v aumu CMPh CMPe"

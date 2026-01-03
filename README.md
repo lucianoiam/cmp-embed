@@ -1,4 +1,4 @@
-# CMP Embed
+# juce-cmp
 
 Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
@@ -55,8 +55,8 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin u
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
 2. **Compose UI app** (`cmpui.app` with bundled JRE)
-3. **AU plugin** (`CMP Embed.component` - uses JUCE 8.0.4)
-4. **Standalone app** (`CMP Embed.app` for testing outside DAW)
+3. **AU plugin** (`juce-cmp.component` - uses JUCE 8.0.4)
+4. **Standalone app** (`juce-cmp.app` for testing outside DAW)
 
 ## Install AU Plugin
 
@@ -64,7 +64,7 @@ This builds:
 ./scripts/install.sh
 ```
 
-This copies `CMP Embed.component` to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache. Restart your DAW and rescan plugins.
+This copies `juce-cmp.component` to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache. Restart your DAW and rescan plugins.
 
 To validate: `auval -v aumu CMPh CMPe`
 

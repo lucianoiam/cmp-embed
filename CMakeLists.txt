@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(cmp-embed)
+project(juce-cmp)
 
 # Paths
 set(UI_DIR "${CMAKE_SOURCE_DIR}/ui")
@@ -57,4 +57,4 @@ add_dependencies(standalone ui)
 # 4. JUCE Host Application (cross-platform plugin host)
 #
 add_subdirectory(juce)
-add_dependencies(CMPEmbedHost ui)
+add_dependencies(juce-cmp ui)

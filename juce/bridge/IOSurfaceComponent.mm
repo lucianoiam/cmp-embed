@@ -294,11 +294,11 @@ void IOSurfaceComponent::launchChildProcess()
         return;
 
     // Find the CMP UI launcher bundled inside this plugin's MacOS folder.
-    // Structure: PluginName.app/Contents/MacOS/cmpui
-    // or:        PluginName.component/Contents/MacOS/cmpui
+    // Structure: PluginName.app/Contents/MacOS/ui
+    // or:        PluginName.component/Contents/MacOS/ui
     auto execFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
     auto macosDir = execFile.getParentDirectory();  // MacOS
-    auto rendererPath = macosDir.getChildFile("cmpui");
+    auto rendererPath = macosDir.getChildFile("ui");
     
     if (!rendererPath.existsAsFile())
         return;

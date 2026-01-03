@@ -370,7 +370,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     CFRetain(self.surface);  // View holds a reference for double-buffering
     
     [self.window setContentView:view];
-    [self.window setTitle:@"CMP Embed"];
+    [self.window setTitle:@"juce-cmp"];
     [self.window setDelegate:self];
     [self.window makeKeyAndOrderFront:nil];
     

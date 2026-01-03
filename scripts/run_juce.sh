@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the JUCE standalone host for CMP Embed
+# Run the JUCE standalone host for juce-cmp
 set -e
 cd "$(dirname "$0")/.."
 
@@ -11,7 +11,7 @@ fi
 
 # Find and run the standalone app
 if [ "$(uname)" == "Darwin" ]; then
-    APP="build/juce/CMPEmbedHost_artefacts/Standalone/CMP Embed.app/Contents/MacOS/CMP Embed"
+    APP="build/juce/juce-cmp_artefacts/Standalone/juce-cmp.app/Contents/MacOS/juce-cmp"
     if [ -f "$APP" ]; then
         exec "$APP"
     else
