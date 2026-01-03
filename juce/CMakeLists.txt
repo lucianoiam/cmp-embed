@@ -74,22 +74,54 @@ if(APPLE)
         "-framework CoreVideo"
     )
     
-    # Copy CMP UI app bundle into each plugin's Resources folder
+    # Paths to Compose Desktop build outputs
     set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/ui/composeApp/build/compose/binaries/main/app/cmpui.app")
+    set(CMP_UI_CONTENTS "${CMP_UI_APP}/Contents")
+    set(NATIVE_RENDERER "${CMAKE_SOURCE_DIR}/ui/composeApp/src/jvmMain/resources/libiosurface_renderer.dylib")
     
-    # Standalone
+    # Standalone - merge Compose runtime into bundle
     add_custom_command(TARGET CMPEmbedHost_Standalone POST_BUILD
+        # Copy Compose launcher to MacOS/
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMP_UI_CONTENTS}/MacOS/cmpui"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/MacOS/cmpui"
+        # Copy JARs + Skiko dylib to app/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMP_UI_APP}"
-            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/Resources/cmpui.app"
-        COMMENT "Copying CMP UI to Standalone bundle"
+            "${CMP_UI_CONTENTS}/app"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/app"
+        # Copy jlink'd JVM to runtime/
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMP_UI_CONTENTS}/runtime"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/runtime"
+        # Copy native renderer to Frameworks/
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${NATIVE_RENDERER}"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/Frameworks/libiosurface_renderer.dylib"
+        COMMENT "Merging Compose runtime into Standalone bundle"
     )
     
-    # AU
+    # AU - merge Compose runtime into bundle
     add_custom_command(TARGET CMPEmbedHost_AU POST_BUILD
+        # Copy Compose launcher to MacOS/
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMP_UI_CONTENTS}/MacOS/cmpui"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/MacOS/cmpui"
+        # Copy JARs + Skiko dylib to app/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMP_UI_APP}"
-            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/Resources/cmpui.app"
-        COMMENT "Copying CMP UI to AU bundle"
+            "${CMP_UI_CONTENTS}/app"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/app"
+        # Copy jlink'd JVM to runtime/
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMP_UI_CONTENTS}/runtime"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/runtime"
+        # Copy native renderer to Frameworks/
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${NATIVE_RENDERER}"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/Frameworks/libiosurface_renderer.dylib"
+        COMMENT "Merging Compose runtime into AU bundle"
     )
 endif()
