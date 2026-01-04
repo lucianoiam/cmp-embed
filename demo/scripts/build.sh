@@ -2,7 +2,7 @@
 # Build script for juce-cmp
 # CMake orchestrates: Native renderer → UI (Compose) → Demo plugin
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 echo "=== Building juce-cmp ==="
 

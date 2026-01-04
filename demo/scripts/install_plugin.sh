@@ -2,14 +2,14 @@
 # Install script for juce-cmp AU plugin
 # Copies the AU plugin to ~/Library/Audio/Plug-Ins/Components/
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 AU_SRC="build/demo/juce-cmp-demo_artefacts/Debug/AU/juce-cmp-demo.component"
 AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/juce-cmp-demo.component"
 
 if [ ! -d "$AU_SRC" ]; then
     echo "Error: AU plugin not found at $AU_SRC"
-    echo "Run ./scripts/build.sh first"
+    echo "Run ./demo/scripts/build.sh first"
     exit 1
 fi
 

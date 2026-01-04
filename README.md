@@ -6,13 +6,13 @@ A JUCE module for embedding Compose Multiplatform UI in audio plugins using IOSu
 
 ```bash
 # Build everything
-./scripts/build.sh
+./demo/scripts/build.sh
 
 # Run demo standalone
-./scripts/run_demo.sh
+./demo/scripts/run_standalone.sh
 
 # Install demo AU plugin
-./scripts/install.sh
+./demo/scripts/install_plugin.sh
 ```
 
 **Prerequisites:**
@@ -176,7 +176,7 @@ demo/                         # Example plugin using juce_cmp
 ## Build
 
 ```bash
-./scripts/build.sh
+./demo/scripts/build.sh
 ```
 
 This builds:
@@ -189,7 +189,7 @@ This builds:
 ## Install Demo Plugin
 
 ```bash
-./scripts/install.sh
+./demo/scripts/install_plugin.sh
 ```
 
 Copies demo AU to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache.
