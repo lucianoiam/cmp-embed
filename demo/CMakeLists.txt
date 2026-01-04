@@ -51,7 +51,7 @@ target_link_libraries(juce-cmp-demo
 # Platform-specific bundle merging
 if(APPLE)
     # Paths to Compose Desktop build outputs
-    set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/juce_cmp_ui/lib/build/compose/binaries/main/app/cmpui.app")
+    set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/demo/ui/composeApp/build/compose/binaries/main/app/cmpui.app")
     set(CMP_UI_CONTENTS "${CMP_UI_APP}/Contents")
 
     # Standalone - merge Compose runtime into bundle

@@ -34,6 +34,7 @@ set(NATIVE_RENDERER_OUT "${UI_DIR}/lib/src/jvmMain/resources/libiosurface_render
 if(APPLE)
     add_custom_command(
         OUTPUT "${NATIVE_RENDERER_OUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${UI_DIR}/lib/src/jvmMain/resources"
         COMMAND clang -dynamiclib
             -o "${NATIVE_RENDERER_OUT}"
             "${NATIVE_RENDERER_SRC}"
@@ -49,22 +50,24 @@ if(APPLE)
 endif()
 
 # Compose UI Application
+set(DEMO_UI_DIR "${CMAKE_SOURCE_DIR}/demo/ui")
+
 if(WIN32)
     set(GRADLE_CMD cmd /c gradlew.bat)
 else()
     set(GRADLE_CMD ./gradlew)
 endif()
 
-file(GLOB_RECURSE KOTLIN_SOURCES "${UI_DIR}/lib/src/*.kt")
-list(APPEND KOTLIN_SOURCES "${UI_DIR}/lib/build.gradle.kts")
+file(GLOB_RECURSE KOTLIN_SOURCES "${DEMO_UI_DIR}/composeApp/src/*.kt")
+list(APPEND KOTLIN_SOURCES "${DEMO_UI_DIR}/composeApp/build.gradle.kts")
 
 set(UI_STAMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/ui.stamp")
 
 add_custom_command(
     OUTPUT "${UI_STAMP_FILE}"
-    COMMAND ${GRADLE_CMD} :lib:build --quiet
+    COMMAND ${GRADLE_CMD} :composeApp:packageDistributionForCurrentOS --quiet
     COMMAND ${CMAKE_COMMAND} -E touch "${UI_STAMP_FILE}"
-    WORKING_DIRECTORY "${UI_DIR}"
+    WORKING_DIRECTORY "${DEMO_UI_DIR}"
     DEPENDS ${KOTLIN_SOURCES} "${NATIVE_RENDERER_OUT}"
     COMMENT "Building Compose UI"
 )
