@@ -73,7 +73,7 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/runtime"
         # Copy native renderer to app/
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_SOURCE_DIR}/juce_cmp_ui/lib/src/jvmMain/resources/libiosurface_renderer.dylib"
+            "${CMAKE_SOURCE_DIR}/juce_cmp_ui/lib/src/main/resources/libiosurface_renderer.dylib"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/libiosurface_renderer.dylib"
         COMMENT "Merging Compose runtime into Standalone bundle"
     )
@@ -93,7 +93,7 @@ if(APPLE)
             "${CMP_UI_CONTENTS}/runtime"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/runtime"
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_SOURCE_DIR}/juce_cmp_ui/lib/src/jvmMain/resources/libiosurface_renderer.dylib"
+            "${CMAKE_SOURCE_DIR}/juce_cmp_ui/lib/src/main/resources/libiosurface_renderer.dylib"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/libiosurface_renderer.dylib"
         COMMENT "Merging Compose runtime into AU bundle"
     )

@@ -27,14 +27,14 @@ juce_add_module(juce_cmp)
 # 3. Build Compose UI runtime
 #
 set(UI_DIR "${CMAKE_SOURCE_DIR}/juce_cmp_ui")
-set(NATIVE_RENDERER_SRC "${UI_DIR}/lib/src/jvmMain/cpp/iosurface_renderer.m")
-set(NATIVE_RENDERER_OUT "${UI_DIR}/lib/src/jvmMain/resources/libiosurface_renderer.dylib")
+set(NATIVE_RENDERER_SRC "${UI_DIR}/lib/src/main/cpp/iosurface_renderer.m")
+set(NATIVE_RENDERER_OUT "${UI_DIR}/lib/src/main/resources/libiosurface_renderer.dylib")
 
 # Native Metal Renderer Library
 if(APPLE)
     add_custom_command(
         OUTPUT "${NATIVE_RENDERER_OUT}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${UI_DIR}/lib/src/jvmMain/resources"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${UI_DIR}/lib/src/main/resources"
         COMMAND clang -dynamiclib
             -o "${NATIVE_RENDERER_OUT}"
             "${NATIVE_RENDERER_SRC}"
