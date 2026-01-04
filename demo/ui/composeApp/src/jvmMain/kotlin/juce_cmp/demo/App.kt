@@ -25,8 +25,8 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 
 import cmpui.composeapp.generated.resources.Res
 import cmpui.composeapp.generated.resources.compose_multiplatform
-import cmpui.widgets.Knob
-import cmpui.bridge.UISender
+import juce_cmp.UISender
+// Knob is in the same package, no import needed
 
 @Composable
 @Preview
