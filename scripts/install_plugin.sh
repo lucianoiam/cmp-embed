@@ -4,8 +4,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
-AU_SRC="build/juce/juce-cmp_artefacts/AU/juce-cmp.component"
-AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/juce-cmp.component"
+AU_SRC="build/demo/juce-cmp-demo_artefacts/Debug/AU/juce-cmp-demo.component"
+AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/juce-cmp-demo.component"
 
 if [ ! -d "$AU_SRC" ]; then
     echo "Error: AU plugin not found at $AU_SRC"
