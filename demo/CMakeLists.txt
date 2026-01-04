@@ -51,14 +51,14 @@ target_link_libraries(juce-cmp-demo
 # Platform-specific bundle merging
 if(APPLE)
     # Paths to Compose Desktop build outputs
-    set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/demo/ui/composeApp/build/compose/binaries/main/app/cmpui.app")
+    set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/demo/ui/composeApp/build/compose/binaries/main/app/juce-cmp-demo.app")
     set(CMP_UI_CONTENTS "${CMP_UI_APP}/Contents")
 
     # Standalone - merge Compose runtime into bundle
     add_custom_command(TARGET juce-cmp-demo_Standalone POST_BUILD
         # Copy Compose launcher to MacOS/
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMP_UI_CONTENTS}/MacOS/cmpui"
+            "${CMP_UI_CONTENTS}/MacOS/juce-cmp-demo"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/MacOS/ui"
         # Copy JARs + Skiko dylib to app/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -66,7 +66,7 @@ if(APPLE)
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app"
         # Rename config file to match binary name
         COMMAND ${CMAKE_COMMAND} -E rename
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/cmpui.cfg"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/juce-cmp-demo.cfg"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/ui.cfg"
         # Copy jlink'd JVM to runtime/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -82,13 +82,13 @@ if(APPLE)
     # AU plugin - merge Compose runtime
     add_custom_command(TARGET juce-cmp-demo_AU POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMP_UI_CONTENTS}/MacOS/cmpui"
+            "${CMP_UI_CONTENTS}/MacOS/juce-cmp-demo"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/MacOS/ui"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/app"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app"
         COMMAND ${CMAKE_COMMAND} -E rename
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/cmpui.cfg"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/juce-cmp-demo.cfg"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/ui.cfg"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/runtime"
