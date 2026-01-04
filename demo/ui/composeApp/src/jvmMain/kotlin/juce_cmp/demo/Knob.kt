@@ -40,7 +40,7 @@ fun Knob(
     modifier: Modifier = Modifier,
     size: Dp = 60.dp,
     trackColor: Color = Color.DarkGray,
-    valueColor: Color = Color(0xFF00BCD4),  // Cyan
+    valueColor: Color = Color.Magenta,
     indicatorColor: Color = Color.White,
     trackWidth: Dp = 5.dp,
     sensitivity: Float = 0.005f
@@ -105,13 +105,6 @@ fun Knob(
             color = indicatorColor,
             radius = strokeWidth * 0.8f,
             center = Offset(indicatorX, indicatorY)
-        )
-        
-        // Center dot
-        drawCircle(
-            color = trackColor,
-            radius = radius * 0.3f,
-            center = center
         )
     }
 }

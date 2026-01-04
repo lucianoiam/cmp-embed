@@ -47,7 +47,7 @@ fun main(args: Array<String>) {
         
         // Start rendering to the shared IOSurface
         runIOSurfaceRenderer(surfaceID, scaleFactor, disableGpu) {
-            App()
+            UserInterface()
         }
     } else {
         // Standalone mode - regular desktop window
@@ -56,7 +56,7 @@ fun main(args: Array<String>) {
                 onCloseRequest = ::exitApplication,
                 title = "CMP UI"
             ) {
-                App()
+                UserInterface()
             }
         }
     }

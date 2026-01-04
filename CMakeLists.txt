@@ -58,7 +58,10 @@ else()
     set(GRADLE_CMD ./gradlew)
 endif()
 
-file(GLOB_RECURSE KOTLIN_SOURCES "${DEMO_UI_DIR}/composeApp/src/*.kt")
+file(GLOB_RECURSE KOTLIN_SOURCES
+    CONFIGURE_DEPENDS
+    "${DEMO_UI_DIR}/composeApp/src/*.kt"
+)
 list(APPEND KOTLIN_SOURCES "${DEMO_UI_DIR}/composeApp/build.gradle.kts")
 
 set(UI_STAMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/ui.stamp")
@@ -72,10 +75,14 @@ add_custom_command(
     COMMENT "Building Compose UI"
 )
 
-add_custom_target(ui DEPENDS "${UI_STAMP_FILE}")
+add_custom_target(ui ALL DEPENDS "${UI_STAMP_FILE}")
 
 #
 # 4. Build demo plugin
 #
 add_subdirectory(demo)
 add_dependencies(juce-cmp-demo ui)
+
+# Force demo to relink when UI changes by adding stamp as a source
+# This ensures POST_BUILD commands run when UI is rebuilt
+set_property(TARGET juce-cmp-demo APPEND PROPERTY LINK_DEPENDS "${UI_STAMP_FILE}")

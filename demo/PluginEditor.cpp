@@ -12,7 +12,7 @@
 PluginEditor::PluginEditor(PluginProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
 {
-    setSize(800, 600);
+    setSize(768, 480);
     setResizable(true, true);
     setResizeLimits(400, 300, 2048, 2048);
     
