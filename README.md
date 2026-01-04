@@ -2,7 +2,7 @@
 
 A JUCE module for embedding Compose Multiplatform UI in audio plugins.
 
-**Note:** this project was vibe-coded entirely by Claude Opus 4.5. Human supervision pending—coming soon in v1.0.0.
+**Note:** This project was entirely vibe-coded by Claude Opus 4.5 under human supervision. Manual code review pending.
 
 ## Quick Start
 
@@ -203,7 +203,7 @@ This builds:
 
 Copies demo AU to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache.
 
-To validate: `auval -v aumu CMPh CMPe`
+To validate: `auval -v aumu JCMs JCMm`
 
 ## Command-Line Flags
 
@@ -221,7 +221,7 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize     |
+| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=param |
 | 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
 | 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
@@ -251,7 +251,7 @@ Messages sent from UI to host via FIFO (see `juce_cmp/juce_cmp/ui_protocol.h`):
 - Windows (DXGI shared textures)
 - Linux (shared memory or Vulkan external memory)
 
-See [TODO.md](TODO.md) for roadmap.
+See [TODO](TODO) for roadmap.
 
 ## License
 
