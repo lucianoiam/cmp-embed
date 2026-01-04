@@ -91,17 +91,23 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         self.layer.contentsGravity = kCAGravityTopLeft;
         
         // Create and start CVDisplayLink for vsync-synchronized updates
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
         CVDisplayLinkSetOutputCallback(_displayLink, displayLinkCallback, (__bridge void *)self);
         CVDisplayLinkStart(_displayLink);
+        #pragma clang diagnostic pop
     }
     return self;
 }
 
 - (void)dealloc {
     if (_displayLink) {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         CVDisplayLinkStop(_displayLink);
         CVDisplayLinkRelease(_displayLink);
+        #pragma clang diagnostic pop
     }
     [_swapTimer invalidate];
     [super dealloc];
@@ -363,7 +369,7 @@ void IOSurfaceComponent::attachNativeView()
     if (!nativeView)
     {
         SurfaceView* view = [[SurfaceView alloc] initWithFrame:NSZeroRect];
-        nativeView = (__bridge_retained void*)view;
+        nativeView = (void*)view;  // Manual retain - view is released in detachNativeView
         view.surface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
         view.backingScale = backingScaleFactor;
         

@@ -47,6 +47,8 @@ public:
         surfaceWidth = w;
         surfaceHeight = h;
 
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         NSDictionary* props = @{
             (id)kIOSurfaceWidth: @(w),
             (id)kIOSurfaceHeight: @(h),
@@ -54,6 +56,7 @@ public:
             (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
             (id)kIOSurfaceIsGlobal: @YES  // Required for cross-process lookup
         };
+        #pragma clang diagnostic pop
         
         surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
         
@@ -85,6 +88,8 @@ public:
         surfaceWidth = w;
         surfaceHeight = h;
 
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         NSDictionary* props = @{
             (id)kIOSurfaceWidth: @(w),
             (id)kIOSurfaceHeight: @(h),
@@ -92,6 +97,7 @@ public:
             (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
             (id)kIOSurfaceIsGlobal: @YES
         };
+        #pragma clang diagnostic pop
         
         pendingSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
         

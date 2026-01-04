@@ -101,7 +101,7 @@ private:
         {
             ssize_t n = ::read(fd, ptr + totalRead, size - totalRead);
             if (n <= 0) return totalRead > 0 ? static_cast<ssize_t>(totalRead) : n;
-            totalRead += n;
+            totalRead += static_cast<size_t>(n);
         }
         return static_cast<ssize_t>(totalRead);
     }

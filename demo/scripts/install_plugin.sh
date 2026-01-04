@@ -32,4 +32,4 @@ killall -9 AudioComponentRegistrar 2>/dev/null || true
 echo "=== Installation complete ==="
 echo ""
 echo "Restart your DAW and rescan plugins to use juce-cmp."
-echo "To validate: auval -v aumu CMPh CMPe"
+echo "To validate: auval -v aumu JCMs JCMm"

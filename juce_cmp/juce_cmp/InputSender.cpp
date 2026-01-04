@@ -20,7 +20,7 @@ namespace juce_cmp
 
 InputSender::InputSender()
 {
-    startTime = juce::Time::getMillisecondCounterHiRes();
+    startTime = static_cast<uint64_t>(juce::Time::getMillisecondCounterHiRes());
 }
 
 InputSender::~InputSender()
@@ -31,7 +31,7 @@ InputSender::~InputSender()
 void InputSender::setPipeFD(int fd)
 {
     pipeFD = fd;
-    startTime = juce::Time::getMillisecondCounterHiRes();
+    startTime = static_cast<uint64_t>(juce::Time::getMillisecondCounterHiRes());
 }
 
 void InputSender::closePipe()

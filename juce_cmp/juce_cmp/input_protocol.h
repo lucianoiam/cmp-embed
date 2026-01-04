@@ -90,7 +90,11 @@ typedef struct {
 #pragma pack(pop)
 
 /* Verify struct size at compile time */
+#ifdef __cplusplus
+static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
+#else
 _Static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
+#endif
 
 #ifdef __cplusplus
 }
