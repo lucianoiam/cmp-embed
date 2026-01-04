@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
+
 /**
  * InputSender - Writes binary input events to child process stdin.
  *

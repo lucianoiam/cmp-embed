@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
+
 #import <stdio.h>
 #import <stdlib.h>
 #import <IOSurface/IOSurface.h>

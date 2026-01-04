@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
+
 /**
  * IOSurfaceProvider - Creates shared GPU memory and manages child process.
  *

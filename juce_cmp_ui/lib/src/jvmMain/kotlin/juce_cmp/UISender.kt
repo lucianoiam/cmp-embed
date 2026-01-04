@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
+
 package juce_cmp
 
 import java.io.File

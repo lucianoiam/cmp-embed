@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
+
 /**
  * IOSurfaceComponent - JUCE Component that displays Compose UI via IOSurface.
  *

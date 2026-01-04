@@ -1,11 +1,5 @@
-/*
-  ==============================================================================
-
-   This file is part of the juce_cmp module.
-   Copyright (c) 2025 - Luciano Iam
-
-  ==============================================================================
-*/
+// SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
+// SPDX-License-Identifier: MIT
 
 #include "juce_cmp.h"
 
