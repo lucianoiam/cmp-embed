@@ -1,6 +1,6 @@
 # juce-cmp
 
-Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
+A JUCE module for embedding Compose Multiplatform UI in audio plugins using IOSurface for zero-copy GPU rendering.
 
 ## Quick Start
 
@@ -8,16 +8,16 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin u
 # Build everything
 ./scripts/build.sh
 
-# Install AU plugin to ~/Library/Audio/Plug-Ins/Components/
-./scripts/install.sh
+# Run demo standalone
+./scripts/run_demo.sh
 
-# Run standalone app for testing
-./scripts/run_juce.sh
+# Install demo AU plugin
+./scripts/install.sh
 ```
 
 **Prerequisites:**
 - macOS 10.15+
-- JDK 17+ (`brew install openjdk@17`)
+- JDK 21+ (`brew install openjdk@21`)
 - CMake 3.15+ (`brew install cmake`)
 - Xcode Command Line Tools (`xcode-select --install`)
 
@@ -25,7 +25,7 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin u
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  JUCE Plugin (AU / Standalone)                          │
+│  JUCE Plugin (uses juce_cmp module)                     │
 │  - IOSurfaceComponent creates shared GPU surface        │
 │  - SurfaceView (NSView) displays via CALayer            │
 │  - CVDisplayLink for vsync-synchronized refresh         │
@@ -33,18 +33,145 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin u
 │  - Launches Compose UI as child process                 │
 └─────────────────┬───────────────────────────────────────┘
                   │ IOSurface ID (arg)    Input events (stdin)
+                  │ UI messages (FIFO) ◄──┘
                   ▼
 ┌─────────────────────────────────────────────────────────┐
 │  UI (Compose Desktop / Skia / Metal)                    │
+│  - Uses juce_cmp_ui library for bridge/renderer code   │
 │  - Renders directly to IOSurface-backed Metal texture   │
 │  - Receives input events, injects into ComposeScene     │
+│  - Sends parameter changes back to host via IPC         │
 │  - Zero CPU pixel copies, invalidation-based rendering  │
 └─────────────────────────────────────────────────────────┘
 ```
 
 **Rendering:** The plugin creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
 
-**Input:** Mouse/keyboard events are captured in the plugin and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
+**Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
+
+**Bidirectional IPC:** The UI can send messages back to the host (e.g., parameter changes) via a named pipe (FIFO).
+
+## Project Structure
+
+### JUCE Module
+
+```
+juce_cmp/                     # JUCE module (include in your plugin)
+  juce_cmp.h                  # Module header with metadata
+  juce_cmp.cpp                # Unity build (C++ implementations)
+  juce_cmp.mm                 # Unity build (Objective-C++ implementations)
+  juce_cmp/                   # Implementation files
+    IOSurfaceComponent.h/mm   # JUCE Component displaying IOSurface
+    IOSurfaceProvider.h/mm    # Creates IOSurface, manages child process
+    InputSender.h/cpp          # Sends input events to child via stdin
+    UIReceiver.h               # Receives messages from UI via FIFO
+    input_protocol.h           # Binary input event protocol (16 bytes)
+    ui_protocol.h              # UI→Host message protocol
+    LoadingPreview.h           # Loading placeholder image
+```
+
+**Usage in your plugin:**
+
+```cpp
+#include <juce_cmp/juce_cmp.h>
+
+class MyEditor : public juce::AudioProcessorEditor {
+    juce_cmp::IOSurfaceComponent surfaceComponent;
+
+    MyEditor(AudioProcessor& p) : AudioProcessorEditor(p) {
+        addAndMakeVisible(surfaceComponent);
+
+        // Handle parameter changes from UI
+        surfaceComponent.onSetParameter([&](uint32_t paramId, float value) {
+            // Update your processor parameters
+        });
+    }
+};
+```
+
+Add to your CMakeLists.txt:
+```cmake
+juce_add_module(path/to/juce_cmp)
+
+target_link_libraries(YourPlugin PRIVATE juce_cmp ...)
+```
+
+### Compose Multiplatform Library
+
+```
+juce_cmp_ui/                  # Kotlin Multiplatform library
+  lib/
+    build.gradle.kts          # Library build config
+    src/jvmMain/
+      kotlin/juce_cmp/
+        UISender.kt            # Sends messages to JUCE host
+        input/
+          InputReceiver.kt     # Reads binary events from stdin
+          InputDispatcher.kt   # Injects events into ComposeScene
+          InputMapper.kt       # Maps protocol events to Compose
+          InputEvent.kt        # Event data classes
+        renderer/
+          IOSurfaceRenderer.kt      # Renderer abstraction
+          IOSurfaceRendererGPU.kt   # Zero-copy Metal rendering
+          IOSurfaceRendererCPU.kt   # Software fallback
+          IOSurfaceLib.kt           # JNA bindings for IOSurface
+      cpp/
+        iosurface_renderer.m   # Native Metal bridge for Skia
+      resources/
+        libiosurface_renderer.dylib  # Built native library
+```
+
+**Usage in your Compose app:**
+
+```kotlin
+// settings.gradle.kts
+includeBuild("path/to/juce_cmp_ui")
+
+// build.gradle.kts
+dependencies {
+    implementation("com.github.juce-cmp:lib")
+}
+
+// main.kt
+import juce_cmp.UISender
+import juce_cmp.renderer.runIOSurfaceRenderer
+
+fun main(args: Array<String>) {
+    if (args.contains("--embed")) {
+        UISender.initialize(args)
+        val surfaceID = args.first { it.startsWith("--iosurface-id=") }
+            .substringAfter("=").toInt()
+        val scale = args.first { it.startsWith("--scale=") }
+            .substringAfter("=").toFloat()
+
+        runIOSurfaceRenderer(surfaceID, scale) {
+            MyApp()  // Your @Composable UI
+        }
+    } else {
+        // Standalone window mode
+        application {
+            Window(onCloseRequest = ::exitApplication) {
+                MyApp()
+            }
+        }
+    }
+}
+```
+
+### Demo Application
+
+```
+demo/                         # Example plugin using juce_cmp
+  PluginProcessor.h/cpp       # Simple synth processor
+  PluginEditor.h/cpp          # Editor using IOSurfaceComponent
+  ui/                         # Demo Compose UI application
+    composeApp/
+      src/jvmMain/kotlin/juce_cmp/demo/
+        main.kt               # Entry point
+        App.kt                # Demo Compose UI
+        Knob.kt               # Example rotary knob widget
+  CMakeLists.txt              # Builds demo plugin
+```
 
 ## Build
 
@@ -54,74 +181,34 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin u
 
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
-2. **Compose UI app** (`cmpui.app` with bundled JRE)
-3. **AU plugin** (`juce-cmp.component` - uses JUCE 8.0.4)
-4. **Standalone app** (`juce-cmp.app` for testing outside DAW)
+2. **juce_cmp_ui library** (Compose Multiplatform library)
+3. **Demo Compose UI** (`cmpui.app` with bundled JRE)
+4. **Demo AU plugin** (`juce-cmp-demo.component`)
+5. **Demo Standalone** (`juce-cmp-demo.app`)
 
-## Install AU Plugin
+## Install Demo Plugin
 
 ```bash
 ./scripts/install.sh
 ```
 
-This copies `juce-cmp.component` to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache. Restart your DAW and rescan plugins.
+Copies demo AU to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache.
 
 To validate: `auval -v aumu CMPh CMPe`
 
-## Run
+## Command-Line Flags
 
-```bash
-# Run standalone for testing
-./scripts/run_juce.sh
-```
-
-Or use the AU plugin in any DAW after running `./scripts/install.sh`.
-
-## Project Structure
-
-```
-common/                # Cross-platform shared code
-  input_protocol.h     # Binary input event protocol (16 bytes/event)
-
-juce/                  # JUCE audio plugin
-  PluginProcessor.cpp/h    # Passthrough audio processor
-  PluginEditor.cpp/h       # Editor hosting IOSurfaceComponent
-  IOSurfaceComponent.mm/h  # Displays IOSurface, captures input
-  IOSurfaceProvider.mm/h   # Creates IOSurface, launches child
-  InputSender.cpp/h        # Sends input events via stdin pipe
-  CMakeLists.txt           # Fetches JUCE 8.0.4, builds plugin
-
-ui/composeApp/         # Kotlin Multiplatform Compose application
-  src/jvmMain/
-    kotlin/cmpui/
-      main.kt          # Entry point
-      App.kt           # Compose UI (demo app)
-      input/           # Input event handling
-        InputReceiver.kt   # Reads binary events from stdin
-        InputDispatcher.kt # Injects events into ComposeScene
-      renderer/        # IOSurface rendering
-        IOSurfaceRendererGPU.kt  # Zero-copy Metal path (default)
-    cpp/
-      iosurface_renderer.m       # Native Metal bridge for Skia
-
-standalone/            # Native macOS app (for exploring foreign process embedding)
-
-scripts/
-  build.sh             # Build everything
-  install.sh           # Install AU to ~/Library/Audio/Plug-Ins/Components/
-  run_juce.sh          # Build and run standalone app
-```
-
-## Flags
-
-The UI app supports:
-- `--embed` - Run as embedded renderer (used when launched by plugin)
-- `--iosurface-id=<id>` - IOSurface to render to
+The UI app supports these flags when launched by the plugin:
+- `--embed` - Run as embedded renderer
+- `--iosurface-id=<id>` - IOSurface ID to render to
+- `--scale=<factor>` - Backing scale factor (e.g., 2.0 for Retina)
+- `--input-pipe=<fd>` - File descriptor for input events
+- `--ipc-fifo=<path>` - Named pipe for UI→Host messages
 - `--disable-gpu` - Use CPU software rendering instead of Metal
 
 ## Input Protocol
 
-Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`):
+Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_protocol.h`):
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
@@ -135,12 +222,27 @@ Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`
 | 10     | 2    | data2      | Scroll delta Y (*100)                 |
 | 12     | 4    | timestamp  | Milliseconds since process start      |
 
-## Future
+## UI Protocol
 
-See [TODO.md](TODO.md) for planned enhancements including:
-- Bidirectional IPC (cursor, clipboard)
-- Windows/Linux platform support
-- VST3 plugin build
+Messages sent from UI to host via FIFO (see `juce_cmp/juce_cmp/ui_protocol.h`):
+
+**Header (8 bytes):**
+- `opcode` (uint32_t) - Message type
+- `payloadSize` (uint32_t) - Payload size in bytes
+
+**Opcodes:**
+- `0x01` - `UI_OPCODE_SET_PARAM` - Set parameter value
+  - Payload: `paramId` (uint32_t), `value` (float)
+
+## Platform Support
+
+**Current:** macOS 10.15+ (IOSurface + Metal)
+
+**Planned:**
+- Windows (DXGI shared textures)
+- Linux (shared memory or Vulkan external memory)
+
+See [TODO.md](TODO.md) for roadmap.
 
 ## License
 
