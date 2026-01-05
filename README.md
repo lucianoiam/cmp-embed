@@ -2,6 +2,8 @@
 
 A JUCE module for embedding Compose Multiplatform UI in audio plugins.
 
+https://github.com/user-attachments/assets/1a56b7d8-f1eb-4f5d-bcfa-0890e39a7270
+
 **Note:** This project was entirely vibe-coded by Claude Opus 4.5 under human supervision. Manual code review pending.
 
 ## Quick Start
