@@ -145,7 +145,7 @@ fun ResizeHandle() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = 2.dp, end = 2.dp),
+            .padding(bottom = 3.dp, end = 3.dp),
         contentAlignment = Alignment.BottomEnd
     ) {
         Canvas(modifier = Modifier.size(16.dp)) {

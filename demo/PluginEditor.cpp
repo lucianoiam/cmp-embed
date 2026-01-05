@@ -13,7 +13,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
 {
     setSize(768, 480);
-    setResizable(true, false);  // Resizable but hide native corner (Compose UI draws its own)
+    setResizable(true, true);  // Keep native corner for AU plugin compatibility
     setResizeLimits(400, 300, 2048, 2048);
     
     // Load the preview image from embedded data
@@ -42,8 +42,19 @@ PluginEditor::PluginEditor(PluginProcessor& p)
             surfaceComponent.sendParameterChange(0, p.shapeParameter->get());
         // Add more parameters here as needed
     });
-    
+
     addAndMakeVisible(surfaceComponent);
+
+    // Hide the native resize corner visually while keeping it functional for AU compatibility
+    // The corner component is added by setResizable() - find it and make it transparent
+    for (int i = 0; i < getNumChildComponents(); ++i)
+    {
+        if (auto* corner = dynamic_cast<juce::ResizableCornerComponent*>(getChildComponent(i)))
+        {
+            corner->setAlpha(0.0f);
+            break;
+        }
+    }
 }
 
 PluginEditor::~PluginEditor()
