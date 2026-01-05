@@ -124,7 +124,12 @@ private fun createRenderResources(
  * 6. GPU work goes directly to the IOSurface - host sees it immediately!
  */
 @OptIn(InternalComposeUiApi::class)
-fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @Composable () -> Unit) {
+fun runIOSurfaceRendererGPU(
+    surfaceID: Int,
+    scaleFactor: Float = 1f,
+    onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
     // println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
     
     // Create Metal context (device + command queue)
@@ -253,7 +258,10 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                         // throttles to display refresh rate via Metal's backpressure.
                         // No artificial delays needed - GPU presentation timing handles it.
                         resources.skiaSurface.flushAndSubmit(syncCpu = true)
-                        
+
+                        // Invoke frame callback if provided
+                        onFrameRendered?.invoke(frameCount.toLong(), resources.skiaSurface)
+
                         if (frameCount == 0) {
                             // println("[GPU] First frame rendered - zero-copy active!")
                             // System.out.flush()

@@ -23,7 +23,12 @@ import org.jetbrains.skia.*
  *
  * Enable with --disable-gpu flag.
  */
-fun runIOSurfaceRendererCPU(surfaceID: Int, scaleFactor: Float = 1f, content: @Composable () -> Unit) {
+fun runIOSurfaceRendererCPU(
+    surfaceID: Int,
+    scaleFactor: Float = 1f,
+    onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
     println("[CPU] Looking up IOSurface ID $surfaceID (scale=$scaleFactor)...")
     println("[CPU] WARNING: CPU renderer does not support window resizing!")
     

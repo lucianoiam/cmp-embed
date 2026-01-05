@@ -7,6 +7,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import juce_cmp.UISender
 import juce_cmp.renderer.runIOSurfaceRenderer
+import juce_cmp.renderer.captureFirstFrame
 
 /**
  * Application entry point.
@@ -46,7 +47,12 @@ fun main(args: Array<String>) {
         val disableGpu = args.contains("--disable-gpu")
         
         // Start rendering to the shared IOSurface
-        runIOSurfaceRenderer(surfaceID, scaleFactor, disableGpu) {
+        runIOSurfaceRenderer(
+            surfaceID = surfaceID,
+            scaleFactor = scaleFactor,
+            disableGpu = disableGpu,
+            onFrameRendered = captureFirstFrame("/tmp/loading_preview.png")
+        ) {
             UserInterface()
         }
     } else {

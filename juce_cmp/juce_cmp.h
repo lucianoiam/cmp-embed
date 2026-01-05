@@ -37,4 +37,3 @@ namespace juce_cmp
 #include "juce_cmp/UIReceiver.h"
 #include "juce_cmp/IOSurfaceProvider.h"
 #include "juce_cmp/IOSurfaceComponent.h"
-#include "juce_cmp/LoadingPreview.h"
