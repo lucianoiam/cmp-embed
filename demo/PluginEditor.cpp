@@ -19,7 +19,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     // Load the preview image from embedded data
     loadingPreviewImage = juce::ImageFileFormat::loadFrom(loading_preview_png, loading_preview_png_len);
     
-    // Wire up UI→Host custom events (interpret ValueTree as parameter changes)
+    // Wire up UI→Host events (interpret JuceValueTree as parameter changes)
     surfaceComponent.onCustomEvent([&p](const juce::ValueTree& tree) {
         if (tree.getType() == juce::Identifier("param"))
         {
@@ -36,9 +36,9 @@ PluginEditor::PluginEditor(PluginProcessor& p)
         }
     });
     
-    // Wire up Host→UI parameter changes (automation from Live, etc.)
+    // Wire up Host→UI parameter changes (automation from DAW, etc.)
     p.setParameterChangedCallback([this](int paramIndex, float value) {
-        // Forward to Compose UI as ValueTree custom event
+        // Forward to Compose UI as GENERIC event with ValueTree payload
         juce::ValueTree tree("param");
         tree.setProperty("id", paramIndex, nullptr);
         tree.setProperty("value", static_cast<double>(value), nullptr);

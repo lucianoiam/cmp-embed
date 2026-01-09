@@ -4,7 +4,7 @@
 /**
  * InputSender - Writes binary input events to child process stdin.
  *
- * Events follow the 16-byte protocol defined in input_protocol.h.
+ * Events follow the 16-byte IPC Protocol defined in ipc_protocol.h.
  * The pipe is non-blocking on the write side; if the child isn't reading
  * fast enough, writes may block momentarily.
  */
@@ -163,7 +163,7 @@ void InputSender::sendCustomEvent(const juce::ValueTree& tree)
     
     // Build header event with payload length in timestamp field
     InputEvent event = {};
-    event.type = INPUT_EVENT_CUSTOM;
+    event.type = JUCE_EVENT_GENERIC;
     event.timestamp = static_cast<uint32_t>(dataSize);
 
 #if JUCE_MAC || JUCE_LINUX

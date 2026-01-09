@@ -70,8 +70,8 @@ juce_cmp/                     # JUCE module (include in your plugin)
     IOSurfaceComponent.h/mm   # JUCE Component displaying IOSurface
     IOSurfaceProvider.h/mm    # Creates IOSurface, manages child process
     InputSender.h/cpp          # Sends input events to child via stdin
-    UIReceiver.h               # Receives ValueTree messages from UI via stdout
-    input_protocol.h           # Binary input event protocol (16 bytes)
+    EventReceiver.h            # Receives ValueTree messages from UI via stdout
+    ipc_protocol.h             # IPC Protocol - binary events (16 bytes)
     LoadingPreview.h           # Loading placeholder image
 ```
 
@@ -119,7 +119,9 @@ juce_cmp_ui/                  # Kotlin Multiplatform library
     build.gradle.kts          # Library build config
     src/jvmMain/
       kotlin/juce_cmp/
-        UISender.kt            # Sends messages to JUCE host
+        events/
+          EventSender.kt       # Sends messages to JUCE host
+          JuceValueTree.kt     # JUCE-compatible ValueTree implementation
         input/
           InputReceiver.kt     # Reads binary events from stdin
           InputDispatcher.kt   # Injects events into ComposeScene
@@ -148,12 +150,12 @@ dependencies {
 }
 
 // main.kt
-import juce_cmp.UISender
+import juce_cmp.Library
 import juce_cmp.renderer.runIOSurfaceRenderer
 
 fun main(args: Array<String>) {
+    Library.init()  // MUST be first
     if (args.contains("--embed")) {
-        UISender.initialize(args)
         val surfaceID = args.first { it.startsWith("--iosurface-id=") }
             .substringAfter("=").toInt()
         val scale = args.first { it.startsWith("--scale=") }
@@ -226,13 +228,13 @@ The UI app supports these flags when launched by the plugin:
 - `--ipc-fifo=<path>` - Named pipe for UI→Host messages
 - `--disable-gpu` - Use CPU software rendering instead of Metal
 
-## Input Protocol
+## IPC Protocol
 
-Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_protocol.h`):
+Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_protocol.h`):
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=custom |
+| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=juce |
 | 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
 | 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
@@ -255,10 +257,10 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_
 **Example (app-level interpretation as parameter):**
 ```kotlin
 // UI→Host
-val tree = ValueTree("param")
+val tree = JuceValueTree("param")
 tree["id"] = paramId      // Int
 tree["value"] = value     // Double
-UISender.send(tree)
+EventSender.send(tree)  // import juce_cmp.events.*
 
 // Host→UI (in onCustomEvent callback)
 if (tree.type == "param") {

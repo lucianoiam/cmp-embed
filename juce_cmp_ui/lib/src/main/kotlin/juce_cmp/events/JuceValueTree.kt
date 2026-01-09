@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-package juce
+package juce_cmp.events
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -12,10 +12,10 @@ import java.nio.ByteOrder
 /**
  * A Kotlin reimplementation of JUCE's ValueTree with binary-compatible serialization.
  *
- * ValueTree is a tree structure where each node has:
+ * JuceValueTree is a tree structure where each node has:
  * - A type identifier (String)
  * - Named properties (String -> Var)
- * - Child ValueTrees
+ * - Child JuceValueTrees
  *
  * ENDIANNESS: Uses LITTLE-ENDIAN byte order to match JUCE's native format.
  * JUCE uses little-endian on all platforms for ValueTree binary serialization,
@@ -26,15 +26,15 @@ import java.nio.ByteOrder
  * - Property count: compressed int (JUCE writeCompressedInt)
  * - For each property: name (null-terminated UTF-8) + Var (compressed size + marker + data)
  * - Child count: compressed int
- * - For each child: recursive ValueTree
+ * - For each child: recursive JuceValueTree
  *
  * This format is compatible with juce::ValueTree::readFromData() and writeToStream().
  */
-class ValueTree(
+class JuceValueTree(
     val type: String = ""
 ) {
     private val properties = LinkedHashMap<String, Var>()
-    private val children = mutableListOf<ValueTree>()
+    private val children = mutableListOf<JuceValueTree>()
 
     /**
      * Check if this is a valid (non-empty) tree.
@@ -97,11 +97,11 @@ class ValueTree(
 
     // --- Child access ---
 
-    fun getChild(index: Int): ValueTree? = children.getOrNull(index)
+    fun getChild(index: Int): JuceValueTree? = children.getOrNull(index)
 
-    fun getChildWithType(type: String): ValueTree? = children.find { it.type == type }
+    fun getChildWithType(type: String): JuceValueTree? = children.find { it.type == type }
 
-    fun addChild(child: ValueTree, index: Int = -1) {
+    fun addChild(child: JuceValueTree, index: Int = -1) {
         if (index < 0 || index >= children.size) {
             children.add(child)
         } else {
@@ -109,11 +109,11 @@ class ValueTree(
         }
     }
 
-    fun removeChild(index: Int): ValueTree? {
+    fun removeChild(index: Int): JuceValueTree? {
         return if (index in children.indices) children.removeAt(index) else null
     }
 
-    fun removeChild(child: ValueTree): Boolean = children.remove(child)
+    fun removeChild(child: JuceValueTree): Boolean = children.remove(child)
 
     fun removeAllChildren() = children.clear()
 
@@ -157,12 +157,12 @@ class ValueTree(
         /**
          * Invalid/empty tree singleton.
          */
-        val invalid = ValueTree("")
+        val invalid = JuceValueTree("")
 
         /**
          * Deserialize from JUCE-compatible binary format.
          */
-        fun fromByteArray(data: ByteArray): ValueTree {
+        fun fromByteArray(data: ByteArray): JuceValueTree {
             val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
             return readFrom(buffer)
         }
@@ -170,17 +170,17 @@ class ValueTree(
         /**
          * Read from an input stream in JUCE-compatible binary format.
          */
-        fun readFrom(input: InputStream): ValueTree {
+        fun readFrom(input: InputStream): JuceValueTree {
             val data = input.readBytes()
             return fromByteArray(data)
         }
 
-        private fun readFrom(buffer: ByteBuffer): ValueTree {
+        private fun readFrom(buffer: ByteBuffer): JuceValueTree {
             // Type (null-terminated UTF-8 string)
             val type = JuceIO.readString(buffer)
             if (type.isEmpty()) return invalid
 
-            val tree = ValueTree(type)
+            val tree = JuceValueTree(type)
 
             // Property count (compressed int)
             val numProps = JuceIO.readCompressedInt(buffer)
@@ -201,7 +201,7 @@ class ValueTree(
     }
 
     override fun toString(): String = buildString {
-        append("ValueTree($type) { ")
+        append("JuceValueTree($type) { ")
         if (properties.isNotEmpty()) {
             append("props: ")
             append(properties.entries.joinToString(", ") { "${it.key}=${it.value}" })

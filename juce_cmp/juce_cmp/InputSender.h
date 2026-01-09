@@ -5,7 +5,7 @@
 
 #include <cstdint>
 #include <juce_data_structures/juce_data_structures.h>
-#include "input_protocol.h"
+#include "ipc_protocol.h"
 
 namespace juce_cmp
 {
@@ -13,7 +13,7 @@ namespace juce_cmp
 /**
  * InputSender - Sends binary input events to the child process via pipe.
  *
- * Uses the protocol defined in input_protocol.h.
+ * Uses the IPC Protocol defined in ipc_protocol.h.
  * Thread-safe for use from JUCE message thread.
  */
 class InputSender
@@ -43,7 +43,7 @@ public:
     void sendFocus(bool focused);
     void sendResize(int width, int height, float scale, uint32_t newSurfaceID);
 
-    // Custom events (host → UI, carries ValueTree payload)
+    // GENERIC events (host → UI, carries ValueTree payload via JUCE_EVENT_GENERIC)
     void sendCustomEvent(const juce::ValueTree& tree);
 
 private:

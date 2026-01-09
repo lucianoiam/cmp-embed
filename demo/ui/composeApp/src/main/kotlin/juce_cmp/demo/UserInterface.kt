@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import juce.ValueTree
-import juce_cmp.UISender
+import juce_cmp.events.JuceValueTree
+import juce_cmp.events.EventSender
 import kotlin.random.Random
 
 @Composable
@@ -268,10 +268,10 @@ fun UserInterface() {
                         onValueChange = {
                             ParameterState.update(0, it)
                             // Send parameter change to host
-                            val tree = ValueTree("param")
+                            val tree = JuceValueTree("param")
                             tree["id"] = 0
                             tree["value"] = it.toDouble()
-                            UISender.send(tree)
+                            EventSender.send(tree)
                         }
                     )
                     Spacer(modifier = Modifier.height(8.dp))

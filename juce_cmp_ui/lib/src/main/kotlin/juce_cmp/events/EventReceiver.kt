@@ -1,39 +1,43 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-package juce_cmp.input
+package juce_cmp.events
 
-import juce.ValueTree
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import juce_cmp.input.InputEvent
+import juce_cmp.input.EventType
 
 /**
- * Reads binary input events from stdin.
- * 
- * Protocol: 16-byte fixed-size events (see common/input_protocol.h).
- * CUSTOM events are followed by variable-length ValueTree payload.
+ * Receives binary events from the host process via stdin pipe.
+ *
+ * IPC Protocol: 16-byte fixed-size events (see juce_cmp/ipc_protocol.h).
+ * GENERIC events (type 5) are followed by variable-length JuceValueTree payload.
  * This runs on a background thread and delivers events via callback.
+ *
+ * Note: This is the Kotlin-side EventReceiver (host → UI direction).
+ * The C++ EventReceiver in juce_cmp handles the opposite direction (UI → host).
  */
-class InputReceiver(
+class EventReceiver(
     private val input: InputStream = System.`in`,
     private val onEvent: (InputEvent) -> Unit,
-    private val onCustomEvent: ((ValueTree) -> Unit)? = null
+    private val onCustomEvent: ((JuceValueTree) -> Unit)? = null
 ) {
     @Volatile
     private var running = false
     private var thread: Thread? = null
-    
+
     /** Returns true if the receiver is still running (stdin not closed) */
     val isRunning: Boolean get() = running
-    
+
     fun start() {
         if (running) return
         running = true
         thread = Thread({
             val buffer = ByteArray(16)
             val byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
-            
+
             while (running) {
                 try {
                     // Read exactly 16 bytes (one event header)
@@ -48,7 +52,7 @@ class InputReceiver(
                         }
                         bytesRead += n
                     }
-                    
+
                     if (bytesRead == 16) {
                         byteBuffer.rewind()
                         val event = InputEvent(
@@ -62,8 +66,8 @@ class InputReceiver(
                             data2 = byteBuffer.short.toInt(),
                             timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
                         )
-                        
-                        if (event.type == EventType.CUSTOM && onCustomEvent != null) {
+
+                        if (event.type == EventType.GENERIC && onCustomEvent != null) {
                             // Read variable-length payload
                             val payloadLength = event.payloadLength
                             if (payloadLength > 0) {
@@ -77,10 +81,10 @@ class InputReceiver(
                                     }
                                     payloadRead += n
                                 }
-                                
+
                                 if (payloadRead == payloadLength) {
-                                    // Parse ValueTree from payload
-                                    val tree = ValueTree.fromByteArray(payload)
+                                    // Parse JuceValueTree from payload
+                                    val tree = JuceValueTree.fromByteArray(payload)
                                     onCustomEvent.invoke(tree)
                                 }
                             }
@@ -94,11 +98,11 @@ class InputReceiver(
                     }
                 }
             }
-        }, "InputReceiver")
+        }, "EventReceiver")
         thread?.isDaemon = true
         thread?.start()
     }
-    
+
     fun stop() {
         running = false
         thread?.interrupt()

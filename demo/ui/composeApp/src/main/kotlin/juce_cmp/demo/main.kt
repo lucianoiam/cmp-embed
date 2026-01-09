@@ -5,7 +5,7 @@ package juce_cmp.demo
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import juce_cmp.UISender
+import juce_cmp.Library
 import juce_cmp.renderer.runIOSurfaceRenderer
 import juce_cmp.renderer.captureFirstFrame
 
@@ -20,9 +20,8 @@ import juce_cmp.renderer.captureFirstFrame
  * which IOSurface to render to.
  */
 fun main(args: Array<String>) {
-    // MUST be first - captures raw stdout fd before any library pollutes it
-    // Redirects System.out to stderr, uses original stdout for binary IPC
-    UISender.initialize()
+    // MUST be first - initializes library before any other code runs
+    Library.init()
     
     val embedMode = args.contains("--embed")
     
@@ -50,8 +49,8 @@ fun main(args: Array<String>) {
             scaleFactor = scaleFactor,
             onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
             onCustomEvent = { tree ->
-                // Interpret ValueTree as parameter event
-                // Expected format: ValueTree("param") with properties "id" (int) and "value" (float/double)
+                // Handle GENERIC events from host (JuceValueTree payloads)
+                // Expected format: JuceValueTree("param") with properties "id" (int) and "value" (float/double)
                 if (tree.type == "param") {
                     val idVar = tree["id"]
                     val valueVar = tree["value"]

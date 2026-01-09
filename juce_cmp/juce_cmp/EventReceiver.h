@@ -8,30 +8,35 @@
 #include <functional>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <unistd.h>
 
 namespace juce_cmp
 {
 
 /**
- * UIReceiver - Reads ValueTree messages from UI process via stdout pipe.
+ * EventReceiver - Receives ValueTree messages from UI process (UI → host direction).
  *
  * Protocol (little-endian):
  * - 4 bytes: message size
- * - N bytes: ValueTree binary data
+ * - N bytes: ValueTree binary data (JUCE-compatible format)
  *
- * The UI process redirects System.out to stderr, then uses the raw stdout fd
- * for binary IPC. This prevents JVM library noise from corrupting the protocol.
+ * The UI process uses EventSender to write JuceValueTree data to stdout.
+ * System.out is redirected to stderr so JVM library noise doesn't corrupt the protocol.
  *
  * Runs a background thread that reads messages and dispatches to registered handler.
+ * Events are coalesced by type to prevent message queue flooding during rapid updates.
+ *
+ * Note: This is the C++ EventReceiver (UI → host direction).
+ * The Kotlin EventReceiver in juce_cmp.events handles the opposite direction (host → UI).
  */
-class UIReceiver
+class EventReceiver
 {
 public:
     using CustomEventHandler = std::function<void(const juce::ValueTree& tree)>;
 
-    UIReceiver() = default;
-    ~UIReceiver() { stop(); }
+    EventReceiver() = default;
+    ~EventReceiver() { stop(); }
 
     void setCustomEventHandler(CustomEventHandler handler) { onCustomEvent = std::move(handler); }
 
@@ -65,7 +70,7 @@ public:
                 // Parse as ValueTree
                 auto tree = juce::ValueTree::readFromData(data.getData(), size);
                 if (tree.isValid())
-                    dispatch(tree);
+                    enqueue(tree);
             }
         });
     }
@@ -93,23 +98,57 @@ private:
         return static_cast<ssize_t>(totalRead);
     }
 
-    void dispatch(const juce::ValueTree& tree)
+    /** 
+     * Enqueue a tree for dispatch, coalescing by type+id to avoid flooding.
+     * Only one pending dispatch per unique key is allowed.
+     * For "param" type, coalesces by type+id property.
+     */
+    void enqueue(const juce::ValueTree& tree)
     {
-        if (onCustomEvent)
+        if (!onCustomEvent) return;
+        
+        // Build coalescing key: type + optional id for param events
+        auto typeStr = tree.getType().toString();
+        juce::String key = typeStr;
+        if (typeStr == "param" && tree.hasProperty("id"))
+            key += "_" + tree.getProperty("id").toString();
+        
         {
-            juce::MessageManager::callAsync([this, tree]() {
-                if (onCustomEvent)
-                    onCustomEvent(tree);
-            });
+            std::lock_guard<std::mutex> lock(pendingMutex);
+            bool wasEmpty = pendingTrees.find(key) == pendingTrees.end();
+            pendingTrees[key] = tree;
+            
+            // Only schedule dispatch if this is a new key (no pending dispatch for it)
+            if (!wasEmpty) return;
         }
+        
+        juce::MessageManager::callAsync([this, key]() {
+            juce::ValueTree treeToDispatch;
+            {
+                std::lock_guard<std::mutex> lock(pendingMutex);
+                auto it = pendingTrees.find(key);
+                if (it != pendingTrees.end())
+                {
+                    treeToDispatch = it->second;
+                    pendingTrees.erase(it);
+                }
+            }
+            
+            if (treeToDispatch.isValid() && onCustomEvent)
+                onCustomEvent(treeToDispatch);
+        });
     }
 
     int fd = -1;
     std::atomic<bool> running { false };
     std::thread readerThread;
     CustomEventHandler onCustomEvent;
+    
+    // Coalescing: one pending tree per type
+    std::mutex pendingMutex;
+    std::map<juce::String, juce::ValueTree> pendingTrees;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UIReceiver)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EventReceiver)
 };
 
 }  // namespace juce_cmp

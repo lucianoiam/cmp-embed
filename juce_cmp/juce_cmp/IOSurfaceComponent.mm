@@ -250,11 +250,11 @@ IOSurfaceComponent::~IOSurfaceComponent()
     
     // Stop child process first - this closes stdin (signaling EOF to child),
     // then waits for child to exit. Once child exits, it closes its end of the
-    // FIFO, which unblocks the UIReceiver thread.
+    // FIFO, which unblocks the EventReceiver thread.
     surfaceProvider.stopChild();
     
-    // Now stop UIReceiver - should exit immediately since child closed FIFO
-    uiReceiver.stop();
+    // Now stop EventReceiver - should exit immediately since child closed FIFO
+    eventReceiver.stop();
     
 #if JUCE_MAC
     detachNativeView();
@@ -328,11 +328,11 @@ void IOSurfaceComponent::launchChildProcess()
         inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
         
         // Set up UI→Host message receiver (reads from child's stdout)
-        uiReceiver.setCustomEventHandler([this](const juce::ValueTree& tree) {
+        eventReceiver.setCustomEventHandler([this](const juce::ValueTree& tree) {
             if (customEventCallback)
                 customEventCallback(tree);
         });
-        uiReceiver.start(surfaceProvider.getStdoutPipeFD());
+        eventReceiver.start(surfaceProvider.getStdoutPipeFD());
         
         childLaunched = true;
 #if JUCE_MAC

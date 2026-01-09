@@ -31,8 +31,8 @@ namespace juce_cmp
 }
 
 // Internal implementation headers
-#include "juce_cmp/input_protocol.h"
+#include "juce_cmp/ipc_protocol.h"
 #include "juce_cmp/InputSender.h"
-#include "juce_cmp/UIReceiver.h"
+#include "juce_cmp/EventReceiver.h"
 #include "juce_cmp/IOSurfaceProvider.h"
 #include "juce_cmp/IOSurfaceComponent.h"

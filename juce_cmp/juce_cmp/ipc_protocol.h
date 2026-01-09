@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * Input Event Protocol - Binary IPC for cross-process input forwarding.
+ * IPC Protocol - Binary IPC for cross-process event forwarding.
  *
- * This header defines the binary protocol for sending input events from
+ * This header defines the binary protocol for sending events from
  * the host application (Cocoa/Win32/JUCE) to the embedded Compose UI.
  *
  * Events are fixed-size 16-byte structs sent over stdin pipe.
@@ -15,10 +15,10 @@
  *   - standalone/input_win32.c  (Windows - future)
  *   - JUCE: direct C++ usage of this header
  *
- * Kotlin side: ui/composeApp/.../InputReceiver.kt reads and dispatches events.
+ * Kotlin side: juce_cmp.events.EventReceiver reads and dispatches events.
  */
-#ifndef INPUT_PROTOCOL_H
-#define INPUT_PROTOCOL_H
+#ifndef IPC_PROTOCOL_H
+#define IPC_PROTOCOL_H
 
 #include <stdint.h>
 
@@ -33,7 +33,7 @@ extern "C" {
 #define INPUT_EVENT_KEY     2
 #define INPUT_EVENT_FOCUS   3
 #define INPUT_EVENT_RESIZE  4
-#define INPUT_EVENT_CUSTOM  5  /* Custom event with ValueTree payload following */
+#define JUCE_EVENT_GENERIC          5  /* JUCE event with ValueTree payload following */
 
 /*
  * Mouse/key actions
@@ -76,8 +76,8 @@ extern "C" {
  *         data1 = scale factor * 100 (e.g., 200 = 2.0x Retina),
  *         timestamp = new IOSurface ID
  *
- * CUSTOM: timestamp = payload length (bytes), followed by ValueTree binary data
- *         The 16-byte header is immediately followed by `length` bytes of payload.
+ * GENERIC: timestamp = payload length (bytes), followed by JuceValueTree binary data
+ *          The 16-byte header is immediately followed by `length` bytes of payload.
  */
 #pragma pack(push, 1)
 typedef struct {
@@ -104,4 +104,4 @@ _Static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
 }
 #endif
 
-#endif /* INPUT_PROTOCOL_H */
+#endif /* IPC_PROTOCOL_H */

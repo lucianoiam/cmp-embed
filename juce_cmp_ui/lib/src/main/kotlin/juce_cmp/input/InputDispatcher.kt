@@ -10,10 +10,10 @@ import androidx.compose.ui.scene.ComposeScene
 
 /**
  * Dispatches input events from the binary protocol to a ComposeScene.
- * 
- * This bridges the InputReceiver (reading from stdin) to Compose's event system.
+ *
+ * This bridges the EventReceiver (reading from stdin) to Compose's event system.
  * Runs on the main/render thread to ensure thread safety with Compose.
- * 
+ *
  * @param scene The ComposeScene to dispatch events to
  * @param scaleFactor The display scale factor (e.g., 2.0 for Retina). Input coordinates
  *                    from the host are in points; we scale them to pixels for Compose.
@@ -38,7 +38,7 @@ class InputDispatcher(
             EventType.KEY -> dispatchKeyEvent(event)
             EventType.FOCUS -> dispatchFocusEvent(event)
             EventType.RESIZE -> dispatchResizeEvent(event)
-            // CUSTOM events are handled separately via InputReceiver.onCustomEvent
+            // GENERIC events are handled separately via EventReceiver.onCustomEvent
         }
     }
     

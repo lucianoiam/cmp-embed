@@ -7,7 +7,7 @@
 #include <juce_data_structures/juce_data_structures.h>
 #include "IOSurfaceProvider.h"
 #include "InputSender.h"
-#include "UIReceiver.h"
+#include "EventReceiver.h"
 #include <functional>
 
 namespace juce_cmp
@@ -28,7 +28,7 @@ public:
     IOSurfaceComponent();
     ~IOSurfaceComponent() override;
 
-    /// Set callback for when UI sends custom events (ValueTree payload)
+    /// Set callback for when UI sends events (JuceValueTree → ValueTree)
     using CustomEventCallback = std::function<void(const juce::ValueTree& tree)>;
     void onCustomEvent(CustomEventCallback callback) { customEventCallback = std::move(callback); }
 
@@ -36,7 +36,7 @@ public:
     using ReadyCallback = std::function<void()>;
     void onReady(ReadyCallback callback) { readyCallback = std::move(callback); }
 
-    /// Send a custom event from host to UI (ValueTree payload)
+    /// Send a GENERIC event from host to UI (ValueTree payload)
     void sendCustomEvent(const juce::ValueTree& tree) { inputSender.sendCustomEvent(tree); }
 
     void resized() override;
@@ -71,7 +71,7 @@ private:
 
     IOSurfaceProvider surfaceProvider;
     InputSender inputSender;
-    UIReceiver uiReceiver;
+    EventReceiver eventReceiver;
     CustomEventCallback customEventCallback;
     ReadyCallback readyCallback;
 

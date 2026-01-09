@@ -8,11 +8,11 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 
 /**
  * Global parameter state that syncs between host and UI.
- * 
+ *
  * When the host changes a parameter (automation, presets, etc.), it sends
- * a PARAM event which updates this state. The Compose UI observes these
- * values and recomposes automatically.
- * 
+ * a GENERIC event with a JuceValueTree("param") payload which updates this state.
+ * The Compose UI observes these values and recomposes automatically.
+ *
  * Usage in Compose:
  * ```
  * val shapeValue by ParameterState.observe(0, 0f)  // paramId, default
@@ -24,7 +24,7 @@ object ParameterState {
     
     /**
      * Update a parameter value from the host.
-     * Called by the renderer when a PARAM event is received.
+     * Called by the renderer when a "param" JuceValueTree is received.
      */
     fun update(paramId: Int, value: Float) {
         parameters[paramId] = value
