@@ -19,27 +19,40 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     // Load the preview image from embedded data
     loadingPreviewImage = juce::ImageFileFormat::loadFrom(loading_preview_png, loading_preview_png_len);
     
-    // Wire up UI→Host parameter changes
-    surfaceComponent.onSetParameter([&p](uint32_t paramId, float value) {
-        switch (paramId) {
-            case 0:
-                if (p.shapeParameter != nullptr)
-                    p.shapeParameter->setValueNotifyingHost(value);
-                break;
-            // Add more parameters here as needed
+    // Wire up UI→Host custom events (interpret ValueTree as parameter changes)
+    surfaceComponent.onCustomEvent([&p](const juce::ValueTree& tree) {
+        if (tree.getType() == juce::Identifier("param"))
+        {
+            auto paramId = static_cast<int>(tree.getProperty("id", -1));
+            auto value = static_cast<float>(static_cast<double>(tree.getProperty("value", 0.0)));
+            
+            switch (paramId) {
+                case 0:
+                    if (p.shapeParameter != nullptr)
+                        p.shapeParameter->setValueNotifyingHost(value);
+                    break;
+                // Add more parameters here as needed
+            }
         }
     });
     
     // Wire up Host→UI parameter changes (automation from Live, etc.)
     p.setParameterChangedCallback([this](int paramIndex, float value) {
-        // Forward to Compose UI via the input protocol
-        surfaceComponent.sendParameterChange(static_cast<uint32_t>(paramIndex), value);
+        // Forward to Compose UI as ValueTree custom event
+        juce::ValueTree tree("param");
+        tree.setProperty("id", paramIndex, nullptr);
+        tree.setProperty("value", static_cast<double>(value), nullptr);
+        surfaceComponent.sendCustomEvent(tree);
     });
     
     // Send initial parameter values when child process is ready
     surfaceComponent.onReady([this, &p]() {
-        if (p.shapeParameter != nullptr)
-            surfaceComponent.sendParameterChange(0, p.shapeParameter->get());
+        if (p.shapeParameter != nullptr) {
+            juce::ValueTree tree("param");
+            tree.setProperty("id", 0, nullptr);
+            tree.setProperty("value", static_cast<double>(p.shapeParameter->get()), nullptr);
+            surfaceComponent.sendCustomEvent(tree);
+        }
         // Add more parameters here as needed
     });
 

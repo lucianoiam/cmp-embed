@@ -327,12 +327,12 @@ void IOSurfaceComponent::launchChildProcess()
     {
         inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
         
-        // Set up UI→Host message receiver
-        uiReceiver.setParamHandler([this](uint32_t paramId, float value) {
-            if (setParamCallback)
-                setParamCallback(paramId, value);
+        // Set up UI→Host message receiver (reads from child's stdout)
+        uiReceiver.setCustomEventHandler([this](const juce::ValueTree& tree) {
+            if (customEventCallback)
+                customEventCallback(tree);
         });
-        uiReceiver.start(surfaceProvider.getIPCFifoPath());
+        uiReceiver.start(surfaceProvider.getStdoutPipeFD());
         
         childLaunched = true;
 #if JUCE_MAC

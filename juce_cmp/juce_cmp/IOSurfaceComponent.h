@@ -4,6 +4,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_data_structures/juce_data_structures.h>
 #include "IOSurfaceProvider.h"
 #include "InputSender.h"
 #include "UIReceiver.h"
@@ -27,16 +28,16 @@ public:
     IOSurfaceComponent();
     ~IOSurfaceComponent() override;
 
-    /// Set callback for when UI sends parameter changes
-    using SetParamCallback = std::function<void(uint32_t paramId, float value)>;
-    void onSetParameter(SetParamCallback callback) { setParamCallback = std::move(callback); }
+    /// Set callback for when UI sends custom events (ValueTree payload)
+    using CustomEventCallback = std::function<void(const juce::ValueTree& tree)>;
+    void onCustomEvent(CustomEventCallback callback) { customEventCallback = std::move(callback); }
 
     /// Set callback for when the child process is ready to receive events
     using ReadyCallback = std::function<void()>;
     void onReady(ReadyCallback callback) { readyCallback = std::move(callback); }
 
-    /// Send a parameter change from host to UI (for automation sync)
-    void sendParameterChange(uint32_t paramId, float value) { inputSender.sendParameterChange(paramId, value); }
+    /// Send a custom event from host to UI (ValueTree payload)
+    void sendCustomEvent(const juce::ValueTree& tree) { inputSender.sendCustomEvent(tree); }
 
     void resized() override;
     void paint(juce::Graphics& g) override;
@@ -71,7 +72,7 @@ private:
     IOSurfaceProvider surfaceProvider;
     InputSender inputSender;
     UIReceiver uiReceiver;
-    SetParamCallback setParamCallback;
+    CustomEventCallback customEventCallback;
     ReadyCallback readyCallback;
 
     bool childLaunched = false;

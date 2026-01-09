@@ -4,76 +4,68 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
-#include "ui_protocol.h"
+#include <juce_data_structures/juce_data_structures.h>
 #include <functional>
 #include <thread>
 #include <atomic>
 #include <unistd.h>
-#include <fcntl.h>
 
 namespace juce_cmp
 {
 
 /**
- * UIReceiver - Reads binary messages from UI process via named pipe (FIFO).
+ * UIReceiver - Reads ValueTree messages from UI process via stdout pipe.
  *
- * Runs a background thread that opens the FIFO (non-blocking to allow clean shutdown),
- * then reads UIMessageHeader + payload and dispatches to registered handlers.
+ * Protocol (little-endian):
+ * - 4 bytes: message size
+ * - N bytes: ValueTree binary data
+ *
+ * The UI process redirects System.out to stderr, then uses the raw stdout fd
+ * for binary IPC. This prevents JVM library noise from corrupting the protocol.
+ *
+ * Runs a background thread that reads messages and dispatches to registered handler.
  */
 class UIReceiver
 {
 public:
-    using SetParamHandler = std::function<void(uint32_t paramId, float value)>;
+    using CustomEventHandler = std::function<void(const juce::ValueTree& tree)>;
 
     UIReceiver() = default;
     ~UIReceiver() { stop(); }
 
-    void setParamHandler(SetParamHandler handler) { onSetParam = std::move(handler); }
+    void setCustomEventHandler(CustomEventHandler handler) { onCustomEvent = std::move(handler); }
 
-    void start(const juce::String& fifoPath)
+    void start(int stdoutPipeFD)
     {
         if (running.load()) return;
-        if (fifoPath.isEmpty()) return;
+        if (stdoutPipeFD < 0) return;
         
-        path = fifoPath;
+        fd = stdoutPipeFD;
         running.store(true);
         
         readerThread = std::thread([this]() {
-            // Blocking open - waits for child to open write end.
-            // This is safe because stopChild() waits for child to exit first,
-            // which closes the FIFO and unblocks this open (or subsequent reads).
-            fd = open(path.toRawUTF8(), O_RDONLY);
-            if (fd < 0)
-            {
-                DBG("UIReceiver: Failed to open FIFO");
-                return;
-            }
-            
-            UIMessageHeader header;
-            
             while (running.load())
             {
-                // Read header (8 bytes)
-                ssize_t bytesRead = readFully(&header, sizeof(header));
-                if (bytesRead != sizeof(header))
+                // Read message size (4 bytes, little-endian)
+                uint32_t size = 0;
+                ssize_t bytesRead = readFully(&size, sizeof(size));
+                if (bytesRead != sizeof(size))
                     break;
                 
-                // Read payload
-                if (header.payloadSize > 0 && header.payloadSize <= 1024)
-                {
-                    std::vector<uint8_t> payload(header.payloadSize);
-                    bytesRead = readFully(payload.data(), header.payloadSize);
-                    if (bytesRead != static_cast<ssize_t>(header.payloadSize))
-                        break;
-                    
-                    dispatch(header.opcode, payload.data(), header.payloadSize);
-                }
-            }
-            
-            if (fd >= 0)
-            {
-                close(fd);
-                fd = -1;
+                // Sanity check
+                if (size == 0 || size > 1024 * 1024)  // Max 1MB
+                    break;
+                
+                // Read message data
+                juce::MemoryBlock data(size);
+                bytesRead = readFully(data.getData(), size);
+                if (bytesRead != static_cast<ssize_t>(size))
+                    break;
+                
+                // Parse as ValueTree
+                auto tree = juce::ValueTree::readFromData(data.getData(), size);
+                if (tree.isValid())
+                    dispatch(tree);
             }
         });
     }
@@ -81,12 +73,7 @@ public:
     void stop()
     {
         running.store(false);
-        // Close fd to unblock reader
-        if (fd >= 0)
-        {
-            close(fd);
-            fd = -1;
-        }
+        // Note: We don't close fd here - it's owned by IOSurfaceProvider
         if (readerThread.joinable())
             readerThread.join();
     }
@@ -106,32 +93,21 @@ private:
         return static_cast<ssize_t>(totalRead);
     }
 
-    void dispatch(uint32_t opcode, const uint8_t* payload, uint32_t size)
+    void dispatch(const juce::ValueTree& tree)
     {
-        switch (opcode)
+        if (onCustomEvent)
         {
-            case UI_OPCODE_SET_PARAM:
-                if (size >= sizeof(UISetParamPayload) && onSetParam)
-                {
-                    auto* p = reinterpret_cast<const UISetParamPayload*>(payload);
-                    // Call on message thread for thread safety
-                    juce::MessageManager::callAsync([this, paramId = p->paramId, value = p->value]() {
-                        if (onSetParam)
-                            onSetParam(paramId, value);
-                    });
-                }
-                break;
-                
-            default:
-                break;
+            juce::MessageManager::callAsync([this, tree]() {
+                if (onCustomEvent)
+                    onCustomEvent(tree);
+            });
         }
     }
 
-    juce::String path;
     int fd = -1;
     std::atomic<bool> running { false };
     std::thread readerThread;
-    SetParamHandler onSetParam;
+    CustomEventHandler onCustomEvent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UIReceiver)
 };

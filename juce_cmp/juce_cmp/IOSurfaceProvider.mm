@@ -191,18 +191,15 @@ public:
             return false;
         }
 
-        // Create named pipe (FIFO) for UI→Host IPC
-        // Use pid-based path to avoid conflicts
-        ipcFifoPath = "/tmp/cmpui-ipc-" + std::to_string(getpid()) + ".fifo";
-        unlink(ipcFifoPath.c_str());  // Remove if exists
-        if (mkfifo(ipcFifoPath.c_str(), 0600) != 0)
+        // Create pipe for stdout (UI→Host IPC: JuceValueTree messages)
+        int stdoutPipes[2];
+        if (pipe(stdoutPipes) != 0)
         {
-            DBG("IOSurfaceProvider: Failed to create IPC FIFO");
+            DBG("IOSurfaceProvider: Failed to create stdout pipe");
             close(stdinPipes[0]);
             close(stdinPipes[1]);
             return false;
         }
-        std::string ipcArg = "--ipc-pipe=" + ipcFifoPath;
         std::string scaleArg = "--scale=" + std::to_string(scale);
 
         childPid = fork();
@@ -211,9 +208,12 @@ public:
         {
             // Child process
             close(stdinPipes[1]);   // Close write end of stdin pipe
+            close(stdoutPipes[0]);  // Close read end of stdout pipe
             
             dup2(stdinPipes[0], STDIN_FILENO);   // Redirect stdin
+            dup2(stdoutPipes[1], STDOUT_FILENO); // Redirect stdout
             close(stdinPipes[0]);
+            close(stdoutPipes[1]);
 
             if (!workDir.empty())
                 chdir(workDir.c_str());
@@ -222,7 +222,6 @@ public:
                   execPath.c_str(), 
                   "--embed", 
                   surfaceArg.c_str(), 
-                  ipcArg.c_str(),
                   scaleArg.c_str(),
                   nullptr);
             
@@ -233,10 +232,10 @@ public:
         {
             // Parent process
             close(stdinPipes[0]);   // Close read end of stdin pipe
+            close(stdoutPipes[1]);  // Close write end of stdout pipe
             
             stdinPipeFD = stdinPipes[1];
-            // Note: ipcPipeFD will be opened lazily by UIReceiver to avoid blocking here
-            // The UIReceiver will open the FIFO path directly
+            stdoutPipeFD = stdoutPipes[0];
             
             DBG("IOSurfaceProvider: Launched child PID " + juce::String(childPid) 
                 + " with surface ID " + juce::String(IOSurfaceGetID(surface)));
@@ -247,8 +246,8 @@ public:
             DBG("IOSurfaceProvider: Fork failed");
             close(stdinPipes[0]);
             close(stdinPipes[1]);
-            unlink(ipcFifoPath.c_str());
-            ipcFifoPath.clear();
+            close(stdoutPipes[0]);
+            close(stdoutPipes[1]);
             return false;
         }
 #else
@@ -292,16 +291,11 @@ public:
             }
         }
         
-        // Close IPC pipe and clean up FIFO after child has exited
-        if (ipcPipeFD >= 0)
+        // Close stdout pipe after child has exited
+        if (stdoutPipeFD >= 0)
         {
-            close(ipcPipeFD);
-            ipcPipeFD = -1;
-        }
-        if (!ipcFifoPath.empty())
-        {
-            unlink(ipcFifoPath.c_str());
-            ipcFifoPath.clear();
+            close(stdoutPipeFD);
+            stdoutPipeFD = -1;
         }
 #endif
     }
@@ -323,14 +317,9 @@ public:
         return stdinPipeFD;
     }
 
-    int getIPCPipeFD() const
+    int getStdoutPipeFD() const
     {
-        return ipcPipeFD;
-    }
-    
-    const std::string& getIPCFifoPath() const
-    {
-        return ipcFifoPath;
+        return stdoutPipeFD;
     }
 
 private:
@@ -356,8 +345,7 @@ private:
     pid_t childPid = 0;
 #endif
     int stdinPipeFD = -1;
-    int ipcPipeFD = -1;
-    std::string ipcFifoPath;
+    int stdoutPipeFD = -1;
     int surfaceWidth = 0;
     int surfaceHeight = 0;
 };
@@ -426,14 +414,9 @@ int IOSurfaceProvider::getInputPipeFD() const
     return pImpl->getInputPipeFD(); 
 }
 
-int IOSurfaceProvider::getIPCPipeFD() const 
+int IOSurfaceProvider::getStdoutPipeFD() const 
 { 
-    return pImpl->getIPCPipeFD(); 
-}
-
-juce::String IOSurfaceProvider::getIPCFifoPath() const
-{
-    return juce::String(pImpl->getIPCFifoPath());
+    return pImpl->getStdoutPipeFD(); 
 }
 
 }  // namespace juce_cmp

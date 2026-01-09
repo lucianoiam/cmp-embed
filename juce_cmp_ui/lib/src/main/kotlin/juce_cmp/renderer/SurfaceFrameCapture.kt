@@ -68,7 +68,8 @@ fun Surface.captureFrameToPNG(outputPath: String): Boolean {
         Files.write(Paths.get(outputPath), bytes)
         encodedData.close()
 
-        println("[SurfaceFrameCapture] Frame captured to: $outputPath (${bytes.size} bytes)")
+        // Note: Using System.err since System.out is redirected for binary IPC
+        System.err.println("[SurfaceFrameCapture] Frame captured to: $outputPath (${bytes.size} bytes)")
         true
     } catch (e: Exception) {
         System.err.println("[SurfaceFrameCapture] Error capturing frame: ${e.message}")

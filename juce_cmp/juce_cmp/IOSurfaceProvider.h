@@ -64,11 +64,8 @@ public:
     /** Get the stdin pipe file descriptor for input forwarding. */
     int getInputPipeFD() const;
 
-    /** Get the IPC pipe file descriptor for reading UI messages. */
-    int getIPCPipeFD() const;
-    
-    /** Get the IPC FIFO path for UIReceiver to open directly. */
-    juce::String getIPCFifoPath() const;
+    /** Get the stdout pipe file descriptor for reading UI messages. */
+    int getStdoutPipeFD() const;
 
 private:
     class Impl;

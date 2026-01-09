@@ -150,21 +150,34 @@ void InputSender::sendResize(int width, int height, float scale, uint32_t newSur
 #endif
 }
 
-void InputSender::sendParameterChange(uint32_t paramId, float value)
+void InputSender::sendCustomEvent(const juce::ValueTree& tree)
 {
-    InputEvent event = {};
-    event.type = INPUT_EVENT_PARAM;
-    event.data1 = static_cast<int16_t>(paramId & 0xFFFF);
-    // Store float bits in timestamp field (reinterpret cast)
-    uint32_t valueBits;
-    std::memcpy(&valueBits, &value, sizeof(float));
-    event.timestamp = valueBits;
-    
     if (pipeFD < 0) return;
 
+    // Serialize ValueTree to binary
+    juce::MemoryOutputStream stream;
+    tree.writeToStream(stream);
+    
+    const void* data = stream.getData();
+    size_t dataSize = stream.getDataSize();
+    
+    // Build header event with payload length in timestamp field
+    InputEvent event = {};
+    event.type = INPUT_EVENT_CUSTOM;
+    event.timestamp = static_cast<uint32_t>(dataSize);
+
 #if JUCE_MAC || JUCE_LINUX
+    // Write header
     ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
     if (written != sizeof(InputEvent))
+    {
+        pipeFD = -1;
+        return;
+    }
+    
+    // Write payload
+    written = write(pipeFD, data, dataSize);
+    if (written != static_cast<ssize_t>(dataSize))
         pipeFD = -1;
 #endif
 }

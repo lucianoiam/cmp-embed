@@ -3,6 +3,7 @@
 
 package juce_cmp.input
 
+import juce.ValueTree
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -11,11 +12,13 @@ import java.nio.ByteOrder
  * Reads binary input events from stdin.
  * 
  * Protocol: 16-byte fixed-size events (see common/input_protocol.h).
+ * CUSTOM events are followed by variable-length ValueTree payload.
  * This runs on a background thread and delivers events via callback.
  */
 class InputReceiver(
     private val input: InputStream = System.`in`,
-    private val onEvent: (InputEvent) -> Unit
+    private val onEvent: (InputEvent) -> Unit,
+    private val onCustomEvent: ((ValueTree) -> Unit)? = null
 ) {
     @Volatile
     private var running = false
@@ -33,7 +36,7 @@ class InputReceiver(
             
             while (running) {
                 try {
-                    // Read exactly 16 bytes (one event)
+                    // Read exactly 16 bytes (one event header)
                     var bytesRead = 0
                     while (bytesRead < 16 && running) {
                         val n = input.read(buffer, bytesRead, 16 - bytesRead)
@@ -59,7 +62,31 @@ class InputReceiver(
                             data2 = byteBuffer.short.toInt(),
                             timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
                         )
-                        onEvent(event)
+                        
+                        if (event.type == EventType.CUSTOM && onCustomEvent != null) {
+                            // Read variable-length payload
+                            val payloadLength = event.payloadLength
+                            if (payloadLength > 0) {
+                                val payload = ByteArray(payloadLength)
+                                var payloadRead = 0
+                                while (payloadRead < payloadLength && running) {
+                                    val n = input.read(payload, payloadRead, payloadLength - payloadRead)
+                                    if (n < 0) {
+                                        running = false
+                                        kotlin.system.exitProcess(0)
+                                    }
+                                    payloadRead += n
+                                }
+                                
+                                if (payloadRead == payloadLength) {
+                                    // Parse ValueTree from payload
+                                    val tree = ValueTree.fromByteArray(payload)
+                                    onCustomEvent.invoke(tree)
+                                }
+                            }
+                        } else {
+                            onEvent(event)
+                        }
                     }
                 } catch (e: Exception) {
                     if (running) {

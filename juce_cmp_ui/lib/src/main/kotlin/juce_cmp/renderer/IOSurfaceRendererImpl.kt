@@ -14,6 +14,7 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import kotlinx.coroutines.*
+import juce.ValueTree
 import juce_cmp.input.InputDispatcher
 import juce_cmp.input.InputEvent
 import juce_cmp.input.InputReceiver
@@ -128,6 +129,7 @@ internal fun runIOSurfaceRendererImpl(
     surfaceID: Int,
     scaleFactor: Float = 1f,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
+    onCustomEvent: ((tree: ValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     // println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
@@ -154,18 +156,21 @@ internal fun runIOSurfaceRendererImpl(
         // Event queue for input events
         val eventQueue = ConcurrentLinkedQueue<InputEvent>()
         
-        // Start input receiver
-        val inputReceiver = InputReceiver { event ->
-            if (event.type == EventType.RESIZE) {
-                // Resize events handled specially - store for main loop
-                // println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
-                // System.out.flush()
-                pendingResize.set(event)
-            } else {
-                eventQueue.offer(event)
-            }
-            needsRedraw.set(true)
-        }
+        // Start input receiver with custom event callback
+        val inputReceiver = InputReceiver(
+            onEvent = { event ->
+                if (event.type == EventType.RESIZE) {
+                    // Resize events handled specially - store for main loop
+                    // println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
+                    // System.out.flush()
+                    pendingResize.set(event)
+                } else {
+                    eventQueue.offer(event)
+                }
+                needsRedraw.set(true)
+            },
+            onCustomEvent = onCustomEvent
+        )
         inputReceiver.start()
         // println("[GPU] Input receiver started")
         

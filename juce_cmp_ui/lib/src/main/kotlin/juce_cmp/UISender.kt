@@ -3,82 +3,71 @@
 
 package juce_cmp
 
-import java.io.File
+import juce.ValueTree
+import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.OutputStream
+import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Opcodes for UI→Host messages.
- * Must match common/ui_protocol.h
- */
-object Opcode {
-    const val SET_PARAM = 1
-}
-
-/**
- * Sends binary messages from UI to host.
+ * Sends binary messages from UI to host over stdout.
  *
- * Protocol: 8-byte header (opcode + payloadSize) followed by payload.
- * See common/ui_protocol.h for protocol definition.
+ * The JVM and libraries (Compose, JNA, etc.) write text to System.out.
+ * To prevent this from corrupting our binary protocol, we:
+ * 1. Capture the raw stdout file descriptor (fd 1) FIRST, before any library loads
+ * 2. Redirect System.out to System.err so library noise goes to stderr
+ * 3. Use the captured raw fd for binary IPC
  *
- * Why we don't use stdout:
- * The JVM and libraries (JNA, Compose, etc.) emit text to stdout (warnings, logs).
- * This corrupts any binary protocol on stdout. Instead, the host creates a named
- * pipe (FIFO) and passes its path via --ipc-pipe=<path>. We open this dedicated
- * channel for clean binary IPC.
+ * This must be initialized as early as possible in main(), before any
+ * other code runs that might write to stdout.
  *
  * Thread-safe: uses synchronized writes.
  */
 object UISender {
-    private var ipcPipePath: String? = null
     private var output: OutputStream? = null
     private val lock = Any()
+    private var initialized = false
     
     /**
-     * Initialize the sender with the IPC pipe path from command line args.
-     * Called once at startup.
+     * Initialize stdout capture for binary IPC.
+     * 
+     * MUST be called as the very first thing in main(), before any
+     * library initialization or other code that might print to stdout.
+     * 
+     * After this call:
+     * - System.out is redirected to stderr (library output goes there)
+     * - Binary messages go to the original stdout (fd 1)
      */
-    fun initialize(args: Array<String>) {
-        for (arg in args) {
-            if (arg.startsWith("--ipc-pipe=")) {
-                ipcPipePath = arg.substringAfter("--ipc-pipe=")
-                break
-            }
-        }
+    fun initialize() {
+        if (initialized) return
+        initialized = true
         
-        if (ipcPipePath != null) {
-            try {
-                output = FileOutputStream(File(ipcPipePath!!))
-            } catch (e: Exception) {
-                // Silently fail if not in embedded mode
-            }
-        }
+        // Capture the raw stdout before anyone else can pollute it
+        // FileDescriptor.out is the JVM's reference to fd 1
+        output = FileOutputStream(FileDescriptor.out)
+        
+        // Redirect System.out to stderr so library noise doesn't corrupt our protocol
+        // All println(), library warnings, etc. will now go to stderr
+        System.setOut(PrintStream(FileOutputStream(FileDescriptor.err), true))
     }
     
     /**
-     * Send a parameter change to the host.
-     *
-     * @param paramId Parameter index (0 = shape, etc.)
-     * @param value Parameter value (0.0 - 1.0)
+     * Send a ValueTree to the host.
+     * 
+     * Protocol: 4-byte size (little-endian) followed by tree bytes.
      */
-    fun setParameter(paramId: Int, value: Float) {
+    fun send(tree: ValueTree) {
         val stream = output ?: return
         
-        // Header (8 bytes) + Payload (8 bytes) = 16 bytes total
-        val buffer = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN)
-        
-        // Header
-        buffer.putInt(Opcode.SET_PARAM)  // opcode
-        buffer.putInt(8)                  // payloadSize
-        
-        // Payload
-        buffer.putInt(paramId)            // paramId
-        buffer.putFloat(value)            // value
+        val treeBytes = tree.toByteArray()
+        val header = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+        header.putInt(treeBytes.size)
         
         synchronized(lock) {
-            stream.write(buffer.array())
+            stream.write(header.array())
+            stream.write(treeBytes)
             stream.flush()
         }
     }

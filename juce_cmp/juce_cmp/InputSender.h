@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <juce_data_structures/juce_data_structures.h>
 #include "input_protocol.h"
 
 namespace juce_cmp
@@ -42,8 +43,8 @@ public:
     void sendFocus(bool focused);
     void sendResize(int width, int height, float scale, uint32_t newSurfaceID);
 
-    // Parameter events (host automation → UI)
-    void sendParameterChange(uint32_t paramId, float value);
+    // Custom events (host → UI, carries ValueTree payload)
+    void sendCustomEvent(const juce::ValueTree& tree);
 
 private:
     void sendEvent(InputEvent& event);

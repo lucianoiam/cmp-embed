@@ -33,7 +33,7 @@ extern "C" {
 #define INPUT_EVENT_KEY     2
 #define INPUT_EVENT_FOCUS   3
 #define INPUT_EVENT_RESIZE  4
-#define INPUT_EVENT_PARAM   5  /* Host parameter change notification */
+#define INPUT_EVENT_CUSTOM  5  /* Custom event with ValueTree payload following */
 
 /*
  * Mouse/key actions
@@ -76,8 +76,8 @@ extern "C" {
  *         data1 = scale factor * 100 (e.g., 200 = 2.0x Retina),
  *         timestamp = new IOSurface ID
  *
- * PARAM: data1 = parameter ID (low 16 bits), 
- *        timestamp = parameter value as float bits (reinterpreted as uint32)
+ * CUSTOM: timestamp = payload length (bytes), followed by ValueTree binary data
+ *         The 16-byte header is immediately followed by `length` bytes of payload.
  */
 #pragma pack(push, 1)
 typedef struct {

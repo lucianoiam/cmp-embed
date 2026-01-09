@@ -20,14 +20,15 @@ import juce_cmp.renderer.captureFirstFrame
  * which IOSurface to render to.
  */
 fun main(args: Array<String>) {
+    // MUST be first - captures raw stdout fd before any library pollutes it
+    // Redirects System.out to stderr, uses original stdout for binary IPC
+    UISender.initialize()
+    
     val embedMode = args.contains("--embed")
     
     if (embedMode) {
         // Hide from Dock - we're a background renderer for the host
         System.setProperty("apple.awt.UIElement", "true")
-        
-        // Initialize IPC sender with pipe path from args
-        UISender.initialize(args)
         
         // Parse --iosurface-id=<id> from host
         val surfaceID = args
@@ -47,7 +48,20 @@ fun main(args: Array<String>) {
         runIOSurfaceRenderer(
             surfaceID = surfaceID,
             scaleFactor = scaleFactor,
-            onFrameRendered = captureFirstFrame("/tmp/loading_preview.png")
+            onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
+            onCustomEvent = { tree ->
+                // Interpret ValueTree as parameter event
+                // Expected format: ValueTree("param") with properties "id" (int) and "value" (float/double)
+                if (tree.type == "param") {
+                    val idVar = tree["id"]
+                    val valueVar = tree["value"]
+                    val id = idVar.toInt()
+                    val value = valueVar.toDouble().toFloat()
+                    if (id >= 0) {
+                        ParameterState.update(id, value)
+                    }
+                }
+            }
         ) {
             UserInterface()
         }

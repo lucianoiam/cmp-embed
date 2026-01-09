@@ -55,7 +55,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 
 **Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** The UI can send messages back to the host (e.g., parameter changes) via a named pipe (FIFO).
+**Bidirectional IPC:** Host→UI uses CUSTOM events carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
 
 ## Project Structure
 
@@ -70,9 +70,8 @@ juce_cmp/                     # JUCE module (include in your plugin)
     IOSurfaceComponent.h/mm   # JUCE Component displaying IOSurface
     IOSurfaceProvider.h/mm    # Creates IOSurface, manages child process
     InputSender.h/cpp          # Sends input events to child via stdin
-    UIReceiver.h               # Receives messages from UI via FIFO
+    UIReceiver.h               # Receives ValueTree messages from UI via stdout
     input_protocol.h           # Binary input event protocol (16 bytes)
-    ui_protocol.h              # UI→Host message protocol
     LoadingPreview.h           # Loading placeholder image
 ```
 
@@ -87,10 +86,20 @@ class MyEditor : public juce::AudioProcessorEditor {
     MyEditor(AudioProcessor& p) : AudioProcessorEditor(p) {
         addAndMakeVisible(surfaceComponent);
 
-        // Handle parameter changes from UI
-        surfaceComponent.onSetParameter([&](uint32_t paramId, float value) {
-            // Update your processor parameters
+        // Handle custom events from UI (app interprets ValueTree content)
+        surfaceComponent.onCustomEvent([&](const juce::ValueTree& tree) {
+            if (tree.getType() == juce::Identifier("param")) {
+                auto paramId = (int)tree.getProperty("id");
+                auto value = (float)(double)tree.getProperty("value");
+                // Update your processor parameters
+            }
         });
+
+        // Send custom event to UI
+        juce::ValueTree tree("param");
+        tree.setProperty("id", 0, nullptr);
+        tree.setProperty("value", 0.5, nullptr);
+        surfaceComponent.sendCustomEvent(tree);
     }
 };
 ```
@@ -223,7 +232,7 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=param |
+| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=custom |
 | 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
 | 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
@@ -233,17 +242,34 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/input_
 | 10     | 2    | data2      | Scroll delta Y (*100)                 |
 | 12     | 4    | timestamp  | Milliseconds since process start      |
 
-## UI Protocol
+## Bidirectional ValueTree Protocol
 
-Messages sent from UI to host via FIFO (see `juce_cmp/juce_cmp/ui_protocol.h`):
+**UI→Host (stdout):**
+- `size` (uint32_t, little-endian) - ValueTree data size in bytes
+- `data` (N bytes) - ValueTree binary serialization (JUCE-compatible)
 
-**Header (8 bytes):**
-- `opcode` (uint32_t) - Message type
-- `payloadSize` (uint32_t) - Payload size in bytes
+**Host→UI (stdin CUSTOM event):**
+- 16-byte header with `type=5` (CUSTOM), `timestamp=payload_length`
+- Followed by `payload_length` bytes of ValueTree binary data
 
-**Opcodes:**
-- `0x01` - `UI_OPCODE_SET_PARAM` - Set parameter value
-  - Payload: `paramId` (uint32_t), `value` (float)
+**Example (app-level interpretation as parameter):**
+```kotlin
+// UI→Host
+val tree = ValueTree("param")
+tree["id"] = paramId      // Int
+tree["value"] = value     // Double
+UISender.send(tree)
+
+// Host→UI (in onCustomEvent callback)
+if (tree.type == "param") {
+    val id = tree["id"].toInt()
+    val value = tree["value"].toDouble().toFloat()
+}
+```
+
+The UI captures the raw stdout file descriptor before any JVM/library code runs,
+then redirects System.out to stderr. This prevents library noise from corrupting
+the binary protocol.
 
 ## Platform Support
 

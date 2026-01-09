@@ -7,6 +7,7 @@ package juce_cmp.input
  * Input event types and data classes matching common/input_protocol.h
  *
  * Binary protocol: 16-byte fixed-size events sent over stdin.
+ * CUSTOM events are followed by variable-length ValueTree payload.
  */
 
 // Event types (matching INPUT_EVENT_* in input_protocol.h)
@@ -15,7 +16,7 @@ object EventType {
     const val KEY = 2
     const val FOCUS = 3
     const val RESIZE = 4
-    const val PARAM = 5
+    const val CUSTOM = 5
 }
 
 // Mouse/key actions (matching INPUT_ACTION_* in input_protocol.h)
@@ -59,7 +60,7 @@ data class InputEvent(
     val y: Int,           // Mouse Y or height
     val data1: Int,       // Scroll X (*100) or codepoint low
     val data2: Int,       // Scroll Y (*100) or codepoint high
-    val timestamp: Long   // Milliseconds or new surface ID for RESIZE
+    val timestamp: Long   // Milliseconds, new surface ID for RESIZE, or payload length for CUSTOM
 ) {
     /** For scroll events, get the scroll delta X (0.01 precision) */
     val scrollX: Float get() = data1 / 100f
@@ -88,9 +89,6 @@ data class InputEvent(
     /** For resize events, get the new IOSurface ID */
     val newSurfaceID: Int get() = timestamp.toInt()
     
-    /** For param events, get the parameter ID */
-    val paramId: Int get() = data1 and 0xFFFF
-    
-    /** For param events, get the parameter value (float bits stored in timestamp) */
-    val paramValue: Float get() = java.lang.Float.intBitsToFloat(timestamp.toInt())
+    /** For custom events, get the payload length in bytes */
+    val payloadLength: Int get() = timestamp.toInt()
 }
