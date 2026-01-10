@@ -150,7 +150,7 @@ void InputSender::sendResize(int width, int height, float scale, uint32_t newSur
 #endif
 }
 
-void InputSender::sendCustomEvent(const juce::ValueTree& tree)
+void InputSender::sendEvent(const juce::ValueTree& tree)
 {
     if (pipeFD < 0) return;
 

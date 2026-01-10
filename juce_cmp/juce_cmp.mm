@@ -7,5 +7,5 @@
 #include "juce_cmp/InputSender.cpp"
 
 // Include all Objective-C++ implementation files
-#include "juce_cmp/IOSurfaceProvider.mm"
-#include "juce_cmp/IOSurfaceComponent.mm"
+#include "juce_cmp/ComposeProvider.mm"
+#include "juce_cmp/ComposeComponent.mm"

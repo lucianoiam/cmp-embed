@@ -47,8 +47,9 @@ fun main(args: Array<String>) {
         runIOSurfaceRenderer(
             surfaceID = surfaceID,
             scaleFactor = scaleFactor,
-            onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
-            onCustomEvent = { tree ->
+            // DEV: Uncomment to generate loading_preview.png from first rendered frame
+            // onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
+            onEvent = { tree ->
                 // Handle GENERIC events from host (JuceValueTree payloads)
                 // Expected format: JuceValueTree("param") with properties "id" (int) and "value" (float/double)
                 if (tree.type == "param") {

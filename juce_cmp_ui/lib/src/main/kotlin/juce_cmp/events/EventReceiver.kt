@@ -21,8 +21,8 @@ import juce_cmp.input.EventType
  */
 class EventReceiver(
     private val input: InputStream = System.`in`,
-    private val onEvent: (InputEvent) -> Unit,
-    private val onCustomEvent: ((JuceValueTree) -> Unit)? = null
+    private val onInputEvent: (InputEvent) -> Unit,
+    private val onJuceEvent: ((JuceValueTree) -> Unit)? = null
 ) {
     @Volatile
     private var running = false
@@ -67,7 +67,7 @@ class EventReceiver(
                             timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
                         )
 
-                        if (event.type == EventType.GENERIC && onCustomEvent != null) {
+                        if (event.type == EventType.GENERIC && onJuceEvent != null) {
                             // Read variable-length payload
                             val payloadLength = event.payloadLength
                             if (payloadLength > 0) {
@@ -85,11 +85,11 @@ class EventReceiver(
                                 if (payloadRead == payloadLength) {
                                     // Parse JuceValueTree from payload
                                     val tree = JuceValueTree.fromByteArray(payload)
-                                    onCustomEvent.invoke(tree)
+                                    onJuceEvent.invoke(tree)
                                 }
                             }
                         } else {
-                            onEvent(event)
+                            onInputEvent(event)
                         }
                     }
                 } catch (e: Exception) {

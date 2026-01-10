@@ -44,7 +44,7 @@ public:
     void sendResize(int width, int height, float scale, uint32_t newSurfaceID);
 
     // GENERIC events (host → UI, carries ValueTree payload via JUCE_EVENT_GENERIC)
-    void sendCustomEvent(const juce::ValueTree& tree);
+    void sendEvent(const juce::ValueTree& tree);
 
 private:
     void sendEvent(InputEvent& event);

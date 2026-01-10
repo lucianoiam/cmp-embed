@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * IOSurfaceProvider - Creates shared GPU memory and manages child process.
+ * ComposeProvider - Creates shared surfaces and manages the child UI process.
  *
  * Uses JUCE APIs where possible:
  * - juce::File for path handling
@@ -13,7 +13,7 @@
  * - IOSurface creation (no JUCE equivalent)
  * - fork/exec with stdin pipe (juce::ChildProcess doesn't support stdin writing)
  */
-#include "IOSurfaceProvider.h"
+#include "ComposeProvider.h"
 #include <juce_core/juce_core.h>
 #include <string>
 
@@ -28,7 +28,7 @@
 namespace juce_cmp
 {
 
-class IOSurfaceProvider::Impl
+class ComposeProvider::Impl
 {
 public:
     Impl() = default;
@@ -62,16 +62,16 @@ public:
         
         if (surface != nullptr)
         {
-            DBG("IOSurfaceProvider: Created surface " + juce::String(w) + "x" + juce::String(h) 
-                + ", ID=" + juce::String(IOSurfaceGetID(surface)));
+            //DBG("ComposeProvider: Created surface " + juce::String(w) + "x" + juce::String(h)
+            //    + ", ID=" + juce::String(IOSurfaceGetID(surface)));
             return true;
         }
         
-        DBG("IOSurfaceProvider: Failed to create surface");
+        DBG("ComposeProvider: Failed to create surface");
         return false;
 #else
         juce::ignoreUnused(w, h);
-        DBG("IOSurfaceProvider: Not implemented on this platform");
+        DBG("ComposeProvider: Not implemented on this platform");
         return false;
 #endif
     }
@@ -103,7 +103,7 @@ public:
         
         if (pendingSurface != nullptr)
         {
-            //DBG("IOSurfaceProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
+            //DBG("ComposeProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
             //    + ", ID=" + juce::String(IOSurfaceGetID(pendingSurface)));
             return IOSurfaceGetID(pendingSurface);
         }
@@ -164,7 +164,7 @@ public:
 #if JUCE_MAC
         if (surface == nullptr)
         {
-            DBG("IOSurfaceProvider: No surface, cannot launch child");
+            DBG("ComposeProvider: No surface, cannot launch child");
             return false;
         }
 
@@ -172,7 +172,7 @@ public:
         juce::File execFile(executable);
         if (!execFile.existsAsFile())
         {
-            DBG("IOSurfaceProvider: Executable not found: " + executable);
+            DBG("ComposeProvider: Executable not found: " + executable);
             return false;
         }
         
@@ -187,7 +187,7 @@ public:
         int stdinPipes[2];
         if (pipe(stdinPipes) != 0)
         {
-            DBG("IOSurfaceProvider: Failed to create stdin pipe");
+            DBG("ComposeProvider: Failed to create stdin pipe");
             return false;
         }
 
@@ -195,7 +195,7 @@ public:
         int stdoutPipes[2];
         if (pipe(stdoutPipes) != 0)
         {
-            DBG("IOSurfaceProvider: Failed to create stdout pipe");
+            DBG("ComposeProvider: Failed to create stdout pipe");
             close(stdinPipes[0]);
             close(stdinPipes[1]);
             return false;
@@ -236,14 +236,14 @@ public:
             
             stdinPipeFD = stdinPipes[1];
             stdoutPipeFD = stdoutPipes[0];
-            
-            DBG("IOSurfaceProvider: Launched child PID " + juce::String(childPid) 
-                + " with surface ID " + juce::String(IOSurfaceGetID(surface)));
+
+            //DBG("ComposeProvider: Launched child PID " + juce::String(childPid)
+            //    + " with surface ID " + juce::String(IOSurfaceGetID(surface)));
             return true;
         }
         else
         {
-            DBG("IOSurfaceProvider: Fork failed");
+            DBG("ComposeProvider: Fork failed");
             close(stdinPipes[0]);
             close(stdinPipes[1]);
             close(stdoutPipes[0]);
@@ -351,70 +351,70 @@ private:
 };
 
 // Public interface - delegates to Impl
-IOSurfaceProvider::IOSurfaceProvider() : pImpl(std::make_unique<Impl>()) {}
-IOSurfaceProvider::~IOSurfaceProvider() = default;
+ComposeProvider::ComposeProvider() : pImpl(std::make_unique<Impl>()) {}
+ComposeProvider::~ComposeProvider() = default;
 
-bool IOSurfaceProvider::createSurface(int width, int height) 
+bool ComposeProvider::createSurface(int width, int height) 
 { 
     return pImpl->createSurface(width, height); 
 }
 
-uint32_t IOSurfaceProvider::resizeSurface(int width, int height) 
+uint32_t ComposeProvider::resizeSurface(int width, int height) 
 { 
     return pImpl->resizeSurface(width, height); 
 }
 
-void IOSurfaceProvider::commitPendingSurface()
+void ComposeProvider::commitPendingSurface()
 {
     pImpl->commitPendingSurface();
 }
 
-void* IOSurfaceProvider::getPendingSurface() const
+void* ComposeProvider::getPendingSurface() const
 {
     return pImpl->getPendingSurface();
 }
 
-uint32_t IOSurfaceProvider::getSurfaceID() const 
+uint32_t ComposeProvider::getSurfaceID() const 
 { 
     return pImpl->getSurfaceID(); 
 }
 
-void* IOSurfaceProvider::getNativeSurface() const 
+void* ComposeProvider::getNativeSurface() const 
 { 
     return pImpl->getNativeSurface(); 
 }
 
-int IOSurfaceProvider::getWidth() const 
+int ComposeProvider::getWidth() const 
 { 
     return pImpl->getWidth(); 
 }
 
-int IOSurfaceProvider::getHeight() const 
+int ComposeProvider::getHeight() const 
 { 
     return pImpl->getHeight(); 
 }
 
-bool IOSurfaceProvider::launchChild(const std::string& executable, float scale, const std::string& workingDir) 
+bool ComposeProvider::launchChild(const std::string& executable, float scale, const std::string& workingDir) 
 { 
     return pImpl->launchChild(juce::String(executable), scale, juce::String(workingDir)); 
 }
 
-void IOSurfaceProvider::stopChild() 
+void ComposeProvider::stopChild() 
 { 
     pImpl->stopChild(); 
 }
 
-bool IOSurfaceProvider::isChildRunning() const 
+bool ComposeProvider::isChildRunning() const 
 { 
     return pImpl->isChildRunning(); 
 }
 
-int IOSurfaceProvider::getInputPipeFD() const 
+int ComposeProvider::getInputPipeFD() const 
 { 
     return pImpl->getInputPipeFD(); 
 }
 
-int IOSurfaceProvider::getStdoutPipeFD() const 
+int ComposeProvider::getStdoutPipeFD() const 
 { 
     return pImpl->getStdoutPipeFD(); 
 }

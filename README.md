@@ -32,7 +32,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  JUCE Plugin (uses juce_cmp module)                     │
-│  - IOSurfaceComponent creates shared GPU surface        │
+│  - ComposeComponent creates shared GPU surface          │
 │  - SurfaceView (NSView) displays via CALayer            │
 │  - CVDisplayLink for vsync-synchronized refresh         │
 │  - Transparent JUCE component captures input events     │
@@ -67,12 +67,12 @@ juce_cmp/                     # JUCE module (include in your plugin)
   juce_cmp.cpp                # Unity build (C++ implementations)
   juce_cmp.mm                 # Unity build (Objective-C++ implementations)
   juce_cmp/                   # Implementation files
-    IOSurfaceComponent.h/mm   # JUCE Component displaying IOSurface
-    IOSurfaceProvider.h/mm    # Creates IOSurface, manages child process
-    InputSender.h/cpp          # Sends input events to child via stdin
-    EventReceiver.h            # Receives ValueTree messages from UI via stdout
-    ipc_protocol.h             # IPC Protocol - binary events (16 bytes)
-    LoadingPreview.h           # Loading placeholder image
+    ComposeComponent.h/mm     # JUCE Component displaying Compose UI
+    ComposeProvider.h/mm      # Creates shared surface, manages child process
+    InputSender.h/cpp         # Sends input events to child via stdin
+    EventReceiver.h           # Receives ValueTree messages from UI via stdout
+    ipc_protocol.h            # IPC Protocol - binary events (16 bytes)
+    LoadingPreview.h          # Loading placeholder image
 ```
 
 **Usage in your plugin:**
@@ -81,13 +81,13 @@ juce_cmp/                     # JUCE module (include in your plugin)
 #include <juce_cmp/juce_cmp.h>
 
 class MyEditor : public juce::AudioProcessorEditor {
-    juce_cmp::IOSurfaceComponent surfaceComponent;
+    juce_cmp::ComposeComponent composeComponent;
 
     MyEditor(AudioProcessor& p) : AudioProcessorEditor(p) {
-        addAndMakeVisible(surfaceComponent);
+        addAndMakeVisible(composeComponent);
 
-        // Handle custom events from UI (app interprets ValueTree content)
-        surfaceComponent.onCustomEvent([&](const juce::ValueTree& tree) {
+        // Handle events from UI (app interprets ValueTree content)
+        composeComponent.onEvent([&](const juce::ValueTree& tree) {
             if (tree.getType() == juce::Identifier("param")) {
                 auto paramId = (int)tree.getProperty("id");
                 auto value = (float)(double)tree.getProperty("value");
@@ -95,11 +95,11 @@ class MyEditor : public juce::AudioProcessorEditor {
             }
         });
 
-        // Send custom event to UI
+        // Send event to UI
         juce::ValueTree tree("param");
         tree.setProperty("id", 0, nullptr);
         tree.setProperty("value", 0.5, nullptr);
-        surfaceComponent.sendCustomEvent(tree);
+        composeComponent.sendEvent(tree);
     }
 };
 ```
@@ -178,7 +178,7 @@ fun main(args: Array<String>) {
 ```
 demo/                         # Example plugin using juce_cmp
   PluginProcessor.h/cpp       # Simple synth processor
-  PluginEditor.h/cpp          # Editor using IOSurfaceComponent
+  PluginEditor.h/cpp          # Editor using ComposeComponent
   ui/                         # Demo Compose UI application
     composeApp/
       src/jvmMain/kotlin/juce_cmp/demo/
@@ -257,7 +257,7 @@ tree["id"] = paramId      // Int
 tree["value"] = value     // Double
 EventSender.send(tree)  // import juce_cmp.events.*
 
-// Host→UI (in onCustomEvent callback)
+// Host→UI (in onEvent callback)
 if (tree.type == "param") {
     val id = tree["id"].toInt()
     val value = tree["value"].toDouble().toFloat()

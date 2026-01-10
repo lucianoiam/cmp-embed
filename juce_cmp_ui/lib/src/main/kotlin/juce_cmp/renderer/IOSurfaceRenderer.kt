@@ -29,17 +29,17 @@ import java.util.concurrent.atomic.AtomicReference
  * @param surfaceID The IOSurface ID to render to
  * @param scaleFactor The display scale factor (e.g., 2.0 for Retina)
  * @param onFrameRendered Optional callback invoked after each frame is rendered
- * @param onCustomEvent Optional callback when host sends GENERIC events (JuceValueTree payload)
+ * @param onEvent Optional callback when host sends GENERIC events (JuceValueTree payload)
  * @param content The Compose content to render
  */
 fun runIOSurfaceRenderer(
     surfaceID: Int,
     scaleFactor: Float = 1f,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
-    onCustomEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    runIOSurfaceRendererImpl(surfaceID, scaleFactor, onFrameRendered, onCustomEvent, content)
+    runIOSurfaceRendererImpl(surfaceID, scaleFactor, onFrameRendered, onEvent, content)
 }
 
 /**
@@ -148,7 +148,7 @@ private fun runIOSurfaceRendererImpl(
     surfaceID: Int,
     scaleFactor: Float = 1f,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
-    onCustomEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     // println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
@@ -177,7 +177,7 @@ private fun runIOSurfaceRendererImpl(
         
         // Start event receiver (receives input events from host via stdin)
         val eventReceiver = EventReceiver(
-            onEvent = { event ->
+            onInputEvent = { event ->
                 if (event.type == EventType.RESIZE) {
                     // Resize events handled specially - store for main loop
                     // println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
@@ -188,7 +188,7 @@ private fun runIOSurfaceRendererImpl(
                 }
                 needsRedraw.set(true)
             },
-            onCustomEvent = onCustomEvent
+            onJuceEvent = onEvent
         )
         eventReceiver.start()
         // println("[GPU] Input receiver started")

@@ -33,12 +33,12 @@ namespace juce_cmp
 class EventReceiver
 {
 public:
-    using CustomEventHandler = std::function<void(const juce::ValueTree& tree)>;
+    using EventHandler = std::function<void(const juce::ValueTree& tree)>;
 
     EventReceiver() = default;
     ~EventReceiver() { stop(); }
 
-    void setCustomEventHandler(CustomEventHandler handler) { onCustomEvent = std::move(handler); }
+    void setEventHandler(EventHandler handler) { onEvent = std::move(handler); }
 
     void start(int stdoutPipeFD)
     {
@@ -78,7 +78,7 @@ public:
     void stop()
     {
         running.store(false);
-        // Note: We don't close fd here - it's owned by IOSurfaceProvider
+        // Note: We don't close fd here - it's owned by ComposeProvider
         if (readerThread.joinable())
             readerThread.join();
     }
@@ -105,7 +105,7 @@ private:
      */
     void enqueue(const juce::ValueTree& tree)
     {
-        if (!onCustomEvent) return;
+        if (!onEvent) return;
         
         // Build coalescing key: type + optional id for param events
         auto typeStr = tree.getType().toString();
@@ -134,15 +134,15 @@ private:
                 }
             }
             
-            if (treeToDispatch.isValid() && onCustomEvent)
-                onCustomEvent(treeToDispatch);
+            if (treeToDispatch.isValid() && onEvent)
+                onEvent(treeToDispatch);
         });
     }
 
     int fd = -1;
     std::atomic<bool> running { false };
     std::thread readerThread;
-    CustomEventHandler onCustomEvent;
+    EventHandler onEvent;
     
     // Coalescing: one pending tree per type
     std::mutex pendingMutex;

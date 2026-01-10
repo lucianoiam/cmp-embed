@@ -6,10 +6,10 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_cmp/juce_cmp.h>
 #include "PluginProcessor.h"
-#include "LoadingPreview.h"
+#include "LoadingPreview.h"  // Binary resource data
 
 /**
- * Plugin Editor - hosts the IOSurfaceComponent that displays Compose UI.
+ * Plugin Editor - hosts the ComposeComponent that displays Compose UI.
  */
 class PluginEditor : public juce::AudioProcessorEditor
 {
@@ -22,8 +22,7 @@ public:
 
 private:
     PluginProcessor& processorRef;
-    juce_cmp::IOSurfaceComponent surfaceComponent;
-    juce::Image loadingPreviewImage;
+    juce_cmp::ComposeComponent composeComponent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 };

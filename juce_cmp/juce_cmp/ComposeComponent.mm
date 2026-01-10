@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * IOSurfaceComponent - JUCE Component that displays Compose UI via IOSurface.
+ * ComposeComponent - JUCE Component that displays Compose UI via IOSurface.
  *
  * Architecture:
  * - SurfaceView (NSView): Native view inserted as subview, displays IOSurface
  *   via CALayer.contents. Uses CVDisplayLink for vsync-synchronized refresh.
- * - IOSurfaceComponent (juce::Component): Transparent component layered on top
+ * - ComposeComponent (juce::Component): Transparent component layered on top
  *   of SurfaceView. Captures all input events and forwards to child process.
  *
  * The separation allows zero-copy GPU display while still using JUCE's input
  * handling. SurfaceView returns nil from hitTest so all events pass through
  * to the JUCE component layer above it.
  */
-#include "IOSurfaceComponent.h"
+#include "ComposeComponent.h"
 #include <juce_core/juce_core.h>
 
 #if JUCE_MAC
@@ -234,7 +234,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 namespace juce_cmp
 {
 
-IOSurfaceComponent::IOSurfaceComponent()
+ComposeComponent::ComposeComponent()
 {
     setOpaque(false);  // Allow parent to show through until child renders
     setWantsKeyboardFocus(true);
@@ -242,7 +242,7 @@ IOSurfaceComponent::IOSurfaceComponent()
     startTimerHz(10); // Low-frequency timer for initial launch and resize checks only
 }
 
-IOSurfaceComponent::~IOSurfaceComponent()
+ComposeComponent::~ComposeComponent()
 {
     if (auto* topLevel = getTopLevelComponent())
         topLevel->removeComponentListener(this);
@@ -261,7 +261,7 @@ IOSurfaceComponent::~IOSurfaceComponent()
 #endif
 }
 
-void IOSurfaceComponent::parentHierarchyChanged()
+void ComposeComponent::parentHierarchyChanged()
 {
 #if JUCE_MAC
     if (childLaunched && getPeer() != nullptr)
@@ -269,25 +269,61 @@ void IOSurfaceComponent::parentHierarchyChanged()
 #endif
 }
 
-void IOSurfaceComponent::componentMovedOrResized(juce::Component&, bool, bool)
+void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
 {
 #if JUCE_MAC
     updateNativeViewBounds();
 #endif
 }
 
-void IOSurfaceComponent::paint(juce::Graphics& g)
+void ComposeComponent::paint(juce::Graphics& g)
 {
-    juce::ignoreUnused(g);
+    // Only draw loading state before child process is ready
+    if (childLaunched)
+        return;
+
+    // Fill background if color is set
+    if (!loadingBackgroundColor.isTransparent())
+        g.fillAll(loadingBackgroundColor);
+
+    // Draw preview image with aspect-ratio scaling
+    if (loadingPreview.isValid())
+    {
+        auto bounds = getLocalBounds().toFloat();
+        float imageAspect = (float)loadingPreview.getWidth() / loadingPreview.getHeight();
+        float boundsAspect = bounds.getWidth() / bounds.getHeight();
+
+        float drawWidth, drawHeight, drawX, drawY;
+        if (imageAspect > boundsAspect)
+        {
+            // Image is wider - fit to width
+            drawWidth = bounds.getWidth();
+            drawHeight = bounds.getWidth() / imageAspect;
+            drawX = 0;
+            drawY = (bounds.getHeight() - drawHeight) / 2;
+        }
+        else
+        {
+            // Image is taller - fit to height
+            drawHeight = bounds.getHeight();
+            drawWidth = bounds.getHeight() * imageAspect;
+            drawX = (bounds.getWidth() - drawWidth) / 2;
+            drawY = 0;
+        }
+
+        g.drawImage(loadingPreview,
+                    drawX, drawY, drawWidth, drawHeight,
+                    0, 0, loadingPreview.getWidth(), loadingPreview.getHeight());
+    }
 }
 
-void IOSurfaceComponent::timerCallback()
+void ComposeComponent::timerCallback()
 {
     if (!childLaunched && getPeer() != nullptr && !getLocalBounds().isEmpty())
         launchChildProcess();
 }
 
-void IOSurfaceComponent::launchChildProcess()
+void ComposeComponent::launchChildProcess()
 {
     if (childLaunched) return;
     auto bounds = getLocalBounds();
@@ -328,9 +364,9 @@ void IOSurfaceComponent::launchChildProcess()
         inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
         
         // Set up UI→Host message receiver (reads from child's stdout)
-        eventReceiver.setCustomEventHandler([this](const juce::ValueTree& tree) {
-            if (customEventCallback)
-                customEventCallback(tree);
+        eventReceiver.setEventHandler([this](const juce::ValueTree& tree) {
+            if (eventCallback)
+                eventCallback(tree);
         });
         eventReceiver.start(surfaceProvider.getStdoutPipeFD());
         
@@ -345,12 +381,12 @@ void IOSurfaceComponent::launchChildProcess()
     }
 }
 
-void IOSurfaceComponent::handleResize()
+void ComposeComponent::handleResize()
 {
     // Handled by SurfaceView now
 }
 
-void IOSurfaceComponent::resized()
+void ComposeComponent::resized()
 {
 #if JUCE_MAC
     if (childLaunched && nativeView)
@@ -363,7 +399,7 @@ void IOSurfaceComponent::resized()
 }
 
 #if JUCE_MAC
-void IOSurfaceComponent::attachNativeView()
+void ComposeComponent::attachNativeView()
 {
     auto* peer = getPeer();
     if (!peer) return;
@@ -378,7 +414,7 @@ void IOSurfaceComponent::attachNativeView()
         view.backingScale = backingScaleFactor;
         
         // Set up resize callback - this is called from SurfaceView.beginResize
-        IOSurfaceProvider* provider = &surfaceProvider;
+        ComposeProvider* provider = &surfaceProvider;
         InputSender* sender = &inputSender;
         float* scalePtr = &backingScaleFactor;
         view.resizeCallback = ^(NSSize size, void (^setPendingSurface)(IOSurfaceRef)) {
@@ -409,7 +445,7 @@ void IOSurfaceComponent::attachNativeView()
     updateNativeViewBounds();
 }
 
-void IOSurfaceComponent::detachNativeView()
+void ComposeComponent::detachNativeView()
 {
     if (nativeView)
     {
@@ -420,7 +456,7 @@ void IOSurfaceComponent::detachNativeView()
     }
 }
 
-void IOSurfaceComponent::updateNativeViewBounds()
+void ComposeComponent::updateNativeViewBounds()
 {
     if (!nativeView) return;
     auto* peer = getPeer();
@@ -449,7 +485,7 @@ void IOSurfaceComponent::updateNativeViewBounds()
         [view setFrame:frame];
 }
 
-void IOSurfaceComponent::updateNativeViewSurface()
+void ComposeComponent::updateNativeViewSurface()
 {
     if (nativeView && surfaceProvider.getNativeSurface())
     {
@@ -463,7 +499,7 @@ void IOSurfaceComponent::updateNativeViewSurface()
 }
 #endif
 
-int IOSurfaceComponent::getModifiers() const
+int ComposeComponent::getModifiers() const
 {
     int mods = 0;
     auto modKeys = juce::ModifierKeys::currentModifiers;
@@ -474,7 +510,7 @@ int IOSurfaceComponent::getModifiers() const
     return mods;
 }
 
-int IOSurfaceComponent::mapMouseButton(const juce::MouseEvent& event) const
+int ComposeComponent::mapMouseButton(const juce::MouseEvent& event) const
 {
     if (event.mods.isLeftButtonDown()) return INPUT_BUTTON_LEFT;
     if (event.mods.isRightButtonDown()) return INPUT_BUTTON_RIGHT;
@@ -482,17 +518,17 @@ int IOSurfaceComponent::mapMouseButton(const juce::MouseEvent& event) const
     return INPUT_BUTTON_NONE;
 }
 
-void IOSurfaceComponent::mouseEnter(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
-void IOSurfaceComponent::mouseExit(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
-void IOSurfaceComponent::mouseMove(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
-void IOSurfaceComponent::mouseDown(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), true, getModifiers()); }
-void IOSurfaceComponent::mouseUp(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), false, getModifiers()); }
-void IOSurfaceComponent::mouseDrag(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
-void IOSurfaceComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) { inputSender.sendMouseScroll(event.x, event.y, wheel.deltaX * 100.0f, wheel.deltaY * 100.0f, getModifiers()); }
-bool IOSurfaceComponent::keyPressed(const juce::KeyPress& key) { inputSender.sendKey(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers()); return true; }
-bool IOSurfaceComponent::keyStateChanged(bool isKeyDown) { juce::ignoreUnused(isKeyDown); return false; }
-void IOSurfaceComponent::focusGained(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(true); }
-void IOSurfaceComponent::focusLost(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(false); }
+void ComposeComponent::mouseEnter(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
+void ComposeComponent::mouseExit(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
+void ComposeComponent::mouseMove(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
+void ComposeComponent::mouseDown(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), true, getModifiers()); }
+void ComposeComponent::mouseUp(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), false, getModifiers()); }
+void ComposeComponent::mouseDrag(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
+void ComposeComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) { inputSender.sendMouseScroll(event.x, event.y, wheel.deltaX * 100.0f, wheel.deltaY * 100.0f, getModifiers()); }
+bool ComposeComponent::keyPressed(const juce::KeyPress& key) { inputSender.sendKey(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers()); return true; }
+bool ComposeComponent::keyStateChanged(bool isKeyDown) { juce::ignoreUnused(isKeyDown); return false; }
+void ComposeComponent::focusGained(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(true); }
+void ComposeComponent::focusLost(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(false); }
 
 }  // namespace juce_cmp
 

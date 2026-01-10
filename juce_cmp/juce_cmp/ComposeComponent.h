@@ -5,7 +5,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
-#include "IOSurfaceProvider.h"
+#include "ComposeProvider.h"
 #include "InputSender.h"
 #include "EventReceiver.h"
 #include <functional>
@@ -14,30 +14,44 @@ namespace juce_cmp
 {
 
 /**
- * IOSurfaceComponent - JUCE Component that displays an IOSurface from a child process.
+ * ComposeComponent - JUCE Component that displays Compose Multiplatform UI.
  *
  * Uses a native NSView subview for zero-copy IOSurface display, while the JUCE
  * Component itself (being "invisible") catches all input events and forwards them
  * to the child process.
  */
-class IOSurfaceComponent : public juce::Component,
+class ComposeComponent : public juce::Component,
                            private juce::Timer,
                            private juce::ComponentListener
 {
 public:
-    IOSurfaceComponent();
-    ~IOSurfaceComponent() override;
+    ComposeComponent();
+    ~ComposeComponent() override;
 
     /// Set callback for when UI sends events (JuceValueTree → ValueTree)
-    using CustomEventCallback = std::function<void(const juce::ValueTree& tree)>;
-    void onCustomEvent(CustomEventCallback callback) { customEventCallback = std::move(callback); }
+    using EventCallback = std::function<void(const juce::ValueTree& tree)>;
+    void onEvent(EventCallback callback) { eventCallback = std::move(callback); }
 
     /// Set callback for when the child process is ready to receive events
     using ReadyCallback = std::function<void()>;
-    void onReady(ReadyCallback callback) { readyCallback = std::move(callback); }
+    void onProcessReady(ReadyCallback callback) { readyCallback = std::move(callback); }
 
     /// Send a GENERIC event from host to UI (ValueTree payload)
-    void sendCustomEvent(const juce::ValueTree& tree) { inputSender.sendCustomEvent(tree); }
+    void sendEvent(const juce::ValueTree& tree) { inputSender.sendEvent(tree); }
+
+    /// Set an image to display while the child process loads (optional)
+    /// @param image The preview image to show
+    /// @param backgroundColor Background color behind the image (default: transparent)
+    void setLoadingPreview(const juce::Image& image,
+                           juce::Colour backgroundColor = juce::Colour())
+    {
+        loadingPreview = image;
+        loadingBackgroundColor = backgroundColor;
+        repaint();  // Trigger redraw to show loading preview
+    }
+
+    /// Returns true if the Compose child process has launched
+    bool isProcessReady() const { return childLaunched; }
 
     void resized() override;
     void paint(juce::Graphics& g) override;
@@ -69,14 +83,18 @@ private:
     int getModifiers() const;
     int mapMouseButton(const juce::MouseEvent& event) const;
 
-    IOSurfaceProvider surfaceProvider;
+    ComposeProvider surfaceProvider;
     InputSender inputSender;
     EventReceiver eventReceiver;
-    CustomEventCallback customEventCallback;
+    EventCallback eventCallback;
     ReadyCallback readyCallback;
 
     bool childLaunched = false;
     float backingScaleFactor = 1.0f;  // e.g., 2.0 for Retina displays
+
+    // Optional loading state visuals
+    juce::Image loadingPreview;
+    juce::Colour loadingBackgroundColor;
 
 #if JUCE_MAC
     void* nativeView = nullptr;  // SurfaceView for displaying IOSurface
@@ -86,7 +104,7 @@ private:
     void updateNativeViewSurface();
 #endif
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(IOSurfaceComponent)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComposeComponent)
 };
 
 }  // namespace juce_cmp

@@ -38,7 +38,7 @@ class InputDispatcher(
             EventType.KEY -> dispatchKeyEvent(event)
             EventType.FOCUS -> dispatchFocusEvent(event)
             EventType.RESIZE -> dispatchResizeEvent(event)
-            // GENERIC events are handled separately via EventReceiver.onCustomEvent
+            // GENERIC events are handled separately via EventReceiver.onEvent
         }
     }
     
