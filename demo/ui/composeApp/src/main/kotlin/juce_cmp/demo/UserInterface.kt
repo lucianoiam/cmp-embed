@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import juce_cmp.events.JuceValueTree
 import juce_cmp.events.EventSender
+import juce_cmp.widgets.ResizeHandle
 import kotlin.random.Random
 
 @Composable
@@ -140,46 +140,6 @@ fun Background() = Box(
         // NOTE: This should match the loading screen background in PluginEditor.cpp (juce::Colour(0xFF6F97FF))
         .background(Color(0xFF6F97FF))
 )
-
-@Composable
-fun ResizeHandle() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 3.dp, end = 3.dp),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        Canvas(modifier = Modifier.size(16.dp)) {
-            val handleColor = Color.DarkGray.copy(alpha = 0.7f)
-            val strokeWidth = 2f
-
-            // Draw three diagonal lines like JUCE resize handle
-            // Bottom line (longest)
-            drawLine(
-                color = handleColor,
-                start = Offset(size.width - 4.dp.toPx(), size.height),
-                end = Offset(size.width, size.height - 4.dp.toPx()),
-                strokeWidth = strokeWidth
-            )
-
-            // Middle line
-            drawLine(
-                color = handleColor,
-                start = Offset(size.width - 8.dp.toPx(), size.height),
-                end = Offset(size.width, size.height - 8.dp.toPx()),
-                strokeWidth = strokeWidth
-            )
-
-            // Top line (shortest)
-            drawLine(
-                color = handleColor,
-                start = Offset(size.width - 12.dp.toPx(), size.height),
-                end = Offset(size.width, size.height - 12.dp.toPx()),
-                strokeWidth = strokeWidth
-            )
-        }
-    }
-}
 
 @Composable
 @Preview
