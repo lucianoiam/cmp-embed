@@ -14,8 +14,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import juce_cmp.events.JuceValueTree
-import juce_cmp.events.EventSender
 import juce_cmp.widgets.ResizeHandle
 
 @Composable
@@ -63,14 +61,7 @@ fun UserInterface() {
                     Spacer(modifier = Modifier.height(8.dp))
                     Knob(
                         value = shapeValue,
-                        onValueChange = {
-                            ParameterState.update(0, it)
-                            // Send parameter change to host
-                            val tree = JuceValueTree("param")
-                            tree["id"] = 0
-                            tree["value"] = it.toDouble()
-                            EventSender.send(tree)
-                        }
+                        onValueChange = { ParameterState.set(0, it) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(

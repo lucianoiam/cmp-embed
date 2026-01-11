@@ -5,31 +5,59 @@ package juce_cmp.demo
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import juce_cmp.events.JuceValueTree
+import juce_cmp.events.EventSender
 
 /**
  * Global parameter state that syncs between host and UI.
  *
- * When the host changes a parameter (automation, presets, etc.), it sends
- * a GENERIC event with a JuceValueTree("param") payload which updates this state.
+ * Handles bidirectional parameter synchronization:
+ * - RX: Host sends "param" events via onHostEvent() to update UI state
+ * - TX: UI calls set() which updates state and notifies host
+ *
  * The Compose UI observes these values and recomposes automatically.
  *
  * Usage in Compose:
  * ```
- * val shapeValue by ParameterState.observe(0, 0f)  // paramId, default
+ * val paramState = ParameterState.getState()
+ * val shapeValue = paramState[0] ?: 0f
+ *
+ * Knob(
+ *     value = shapeValue,
+ *     onValueChange = { ParameterState.set(0, it) }
+ * )
  * ```
  */
 object ParameterState {
     // Thread-safe observable map of parameter ID -> value
     private val parameters: SnapshotStateMap<Int, Float> = mutableStateMapOf()
-    
+
     /**
-     * Update a parameter value from the host.
-     * Called by the renderer when a "param" JuceValueTree is received.
+     * Set a parameter value from the UI.
+     * Updates local state and sends to host.
      */
-    fun update(paramId: Int, value: Float) {
+    fun set(paramId: Int, value: Float) {
         parameters[paramId] = value
+        val tree = JuceValueTree("param")
+        tree["id"] = paramId
+        tree["value"] = value.toDouble()
+        EventSender.send(tree)
     }
-    
+
+    /**
+     * Handle a "param" event from the host.
+     * Updates local state without sending back to host.
+     */
+    fun onEvent(tree: JuceValueTree) {
+        if (tree.type == "param") {
+            val id = tree["id"].toInt()
+            val value = tree["value"].toDouble().toFloat()
+            if (id >= 0) {
+                parameters[id] = value
+            }
+        }
+    }
+
     /**
      * Get the current value of a parameter.
      * Returns the default if not yet set.
@@ -37,10 +65,9 @@ object ParameterState {
     fun get(paramId: Int, default: Float = 0f): Float {
         return parameters[paramId] ?: default
     }
-    
+
     /**
      * Get the state map for observation in Compose.
-     * Use with `derivedStateOf` or directly observe.
      */
     fun getState(): SnapshotStateMap<Int, Float> = parameters
 }

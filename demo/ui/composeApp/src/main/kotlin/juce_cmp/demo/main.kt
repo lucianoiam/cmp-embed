@@ -23,16 +23,7 @@ fun main(args: Array<String>) {
         Library.embeddedApplication(
             // DEV: Uncomment to generate loading_preview.png from first rendered frame
             // onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
-            onJuceEvent = { tree ->
-                // Handle events from host (JuceValueTree payload)
-                if (tree.type == "param") {
-                    val id = tree["id"].toInt()
-                    val value = tree["value"].toDouble().toFloat()
-                    if (id >= 0) {
-                        ParameterState.update(id, value)
-                    }
-                }
-            }
+            onEvent = ParameterState::onEvent
         ) {
             UserInterface()
         }

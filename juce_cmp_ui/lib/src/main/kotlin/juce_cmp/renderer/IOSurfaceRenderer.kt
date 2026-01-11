@@ -189,7 +189,7 @@ private fun runIOSurfaceRendererImpl(
                 }
                 needsRedraw.set(true)
             },
-            onJuceEvent = onEvent
+            onEvent = onEvent
         )
         eventReceiver.start()
         // println("[GPU] Input receiver started")

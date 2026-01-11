@@ -80,12 +80,12 @@ object Library {
      * This function blocks and renders Compose content until the host closes
      * the connection. Mirrors the Compose `application { }` pattern.
      *
-     * @param onJuceEvent Optional callback when host sends events (JuceValueTree payload)
+     * @param onEvent Optional callback when host sends events (JuceValueTree payload)
      * @param onFrameRendered Optional callback after each frame (for debugging/capture)
      * @param content The Compose content to render
      */
     fun embeddedApplication(
-        onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
+        onEvent: ((tree: JuceValueTree) -> Unit)? = null,
         onFrameRendered: ((frameNumber: Long, surface: org.jetbrains.skia.Surface) -> Unit)? = null,
         content: @Composable () -> Unit
     ) {
@@ -95,7 +95,7 @@ object Library {
             surfaceID = id,
             scaleFactor = scaleFactor,
             onFrameRendered = onFrameRendered,
-            onEvent = onJuceEvent,
+            onEvent = onEvent,
             content = content
         )
     }

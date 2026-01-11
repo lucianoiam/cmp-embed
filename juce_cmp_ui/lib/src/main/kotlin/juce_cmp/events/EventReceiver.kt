@@ -20,7 +20,7 @@ import juce_cmp.input.InputEvent
 class EventReceiver(
     private val input: InputStream = System.`in`,
     private val onInputEvent: (InputEvent) -> Unit,
-    private val onJuceEvent: ((JuceValueTree) -> Unit)? = null
+    private val onEvent: ((JuceValueTree) -> Unit)? = null
 ) {
     @Volatile
     private var running = false
@@ -113,7 +113,7 @@ class EventReceiver(
 
         if (bytesRead == 4) {
             val size = ByteBuffer.wrap(sizeBuffer).order(ByteOrder.LITTLE_ENDIAN).int
-            if (size > 0 && onJuceEvent != null) {
+            if (size > 0 && onEvent != null) {
                 val payload = ByteArray(size)
                 var payloadRead = 0
                 while (payloadRead < size && running) {
@@ -127,7 +127,7 @@ class EventReceiver(
 
                 if (payloadRead == size) {
                     val tree = JuceValueTree.fromByteArray(payload)
-                    onJuceEvent.invoke(tree)
+                    onEvent.invoke(tree)
                 }
             }
         }
