@@ -139,19 +139,19 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 /// Swap pending surface after child has rendered
 - (void)commitSwap {
     self.swapTimer = nil;
-    
+
     if (self.pendingSurface) {
         // Notify host to commit its provider state
         if (self.commitCallback) {
             self.commitCallback();
         }
-        
+
         self.surface = self.pendingSurface;
         self.pendingSurface = nil;
-        self.lastCommittedSize = self.pendingSize;
+        // lastCommittedSize is set by setSurface: based on actual surface dimensions
         [self.layer setNeedsDisplay];
     }
-    
+
     // Continue if size changed during swap delay
     if (!NSEqualSizes(self.pendingSize, self.lastCommittedSize)) {
         [self beginResize];
