@@ -49,17 +49,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 @interface SurfaceView : NSView
 
-/// Currently displayed surface (what the user sees)
+/// Currently displayed surface
 @property (nonatomic, assign) IOSurfaceRef surface;
-
-/// New surface being rendered to (not yet displayed)
-@property (nonatomic, assign) IOSurfaceRef pendingSurface;
-
-/// Size of the pending surface (target size during resize) - in points
-@property (nonatomic, assign) NSSize pendingSize;
-
-/// Size of the currently displayed surface - in points
-@property (nonatomic, assign) NSSize lastCommittedSize;
 
 /// Backing scale factor (e.g., 2.0 for Retina)
 @property (nonatomic, assign) CGFloat backingScale;
@@ -67,14 +58,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 /// Vsync-synchronized display refresh
 @property (nonatomic, assign) CVDisplayLinkRef displayLink;
 
-/// Timer for delayed swap after child renders
-@property (nonatomic, strong) NSTimer *swapTimer;
-
-/// Callback to request resize from host, receives pending surface back
-@property (nonatomic, copy) void (^resizeCallback)(NSSize size, void (^setPendingSurface)(IOSurfaceRef));
-
-/// Callback when swap is committed (to sync provider state)
-@property (nonatomic, copy) void (^commitCallback)(void);
+/// Callback to request resize from host
+@property (nonatomic, copy) void (^resizeCallback)(NSSize size);
 
 @end
 
@@ -84,12 +69,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     self = [super initWithFrame:frame];
     if (self) {
         self.wantsLayer = YES;
-        self.lastCommittedSize = frame.size;
-        self.pendingSize = frame.size;
         self.backingScale = 1.0;  // Will be updated when added to window
-        // Pin content to top-left, no stretching during resize
         self.layer.contentsGravity = kCAGravityTopLeft;
-        
+
         // Create and start CVDisplayLink for vsync-synchronized updates
         #pragma clang diagnostic push
         #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -109,7 +91,6 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         CVDisplayLinkRelease(_displayLink);
         #pragma clang diagnostic pop
     }
-    [_swapTimer invalidate];
     [super dealloc];
 }
 
@@ -128,73 +109,14 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 - (void)setSurface:(IOSurfaceRef)surface {
     _surface = surface;
-    // lastCommittedSize is in points, not pixels
-    CGFloat scale = self.backingScale > 0 ? self.backingScale : 1.0;
-    self.lastCommittedSize = NSMakeSize(IOSurfaceGetWidth(surface) / scale, IOSurfaceGetHeight(surface) / scale);
     [self.layer setNeedsDisplay];
 }
 
-#pragma mark - Resize Handling (matches standalone)
-
-/// Swap pending surface after child has rendered
-- (void)commitSwap {
-    self.swapTimer = nil;
-
-    if (self.pendingSurface) {
-        // Notify host to commit its provider state
-        if (self.commitCallback) {
-            self.commitCallback();
-        }
-
-        self.surface = self.pendingSurface;
-        self.pendingSurface = nil;
-        // lastCommittedSize is set by setSurface: based on actual surface dimensions
-        [self.layer setNeedsDisplay];
-    }
-
-    // Continue if size changed during swap delay
-    if (!NSEqualSizes(self.pendingSize, self.lastCommittedSize)) {
-        [self beginResize];
-    }
-}
-
-/// Create new surface and schedule swap after one frame
-- (void)beginResize {
-    if (self.pendingSize.width <= 0 || self.pendingSize.height <= 0) return;
-    
-    [self.swapTimer invalidate];
-    
-    // Request resize from host (creates surface, sends to child)
-    // Note: callback is synchronous, sets pendingSurface immediately
-    if (self.resizeCallback) {
-        SurfaceView* selfPtr = self;
-        self.resizeCallback(self.pendingSize, ^(IOSurfaceRef surface) {
-            selfPtr.pendingSurface = surface;
-        });
-    }
-    
-    // Swap after one frame (17ms) so child has time to render
-    self.swapTimer = [NSTimer timerWithTimeInterval:0.017
-                                             target:self
-                                           selector:@selector(commitSwap)
-                                           userInfo:nil
-                                            repeats:NO];
-    [[NSRunLoop currentRunLoop] addTimer:self.swapTimer forMode:NSRunLoopCommonModes];
-}
-
-/// Handle resize request - only starts if no swap pending
+/// Handle resize request
 - (void)requestResize:(NSSize)newSize {
-    if (!NSEqualSizes(newSize, self.lastCommittedSize) && newSize.width > 0 && newSize.height > 0) {
-        self.pendingSize = newSize;
-        if (!self.swapTimer) {
-            [self beginResize];
-        }
+    if (newSize.width > 0 && newSize.height > 0 && self.resizeCallback) {
+        self.resizeCallback(newSize);
     }
-}
-
-/// Set pending surface (called by host after creating new surface)
-- (void)setPendingSurface:(IOSurfaceRef)pendingSurface {
-    _pendingSurface = pendingSurface;
 }
 
 // This view is purely for display - never accept any events
@@ -426,27 +348,25 @@ void ComposeComponent::attachNativeView()
         nativeView = (void*)view;  // Manual retain - view is released in detachNativeView
         view.surface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
         view.backingScale = backingScaleFactor;
-        
-        // Set up resize callback - this is called from SurfaceView.beginResize
+
+        // Set up resize callback
         ComposeProvider* provider = &surfaceProvider;
         InputSender* sender = &inputSender;
         float* scalePtr = &backingScaleFactor;
-        view.resizeCallback = ^(NSSize size, void (^setPendingSurface)(IOSurfaceRef)) {
-            // Get current scale factor
+        void** nativeViewPtr = &nativeView;
+        view.resizeCallback = ^(NSSize size) {
             float scale = *scalePtr;
-            // Create new pending surface at pixel dimensions
             int pixelW = (int)(size.width * scale);
             int pixelH = (int)(size.height * scale);
             uint32_t newSurfaceID = provider->resizeSurface(pixelW, pixelH);
             if (newSurfaceID != 0) {
-                setPendingSurface((IOSurfaceRef)provider->getPendingSurface());
                 sender->sendResize(pixelW, pixelH, scale, newSurfaceID);
+                // Update displayed surface immediately
+                if (*nativeViewPtr) {
+                    SurfaceView* v = (__bridge SurfaceView*)*nativeViewPtr;
+                    v.surface = (IOSurfaceRef)provider->getNativeSurface();
+                }
             }
-        };
-        
-        // Set up commit callback - called when SurfaceView swaps surfaces
-        view.commitCallback = ^{
-            provider->commitPendingSurface();
         };
     }
     

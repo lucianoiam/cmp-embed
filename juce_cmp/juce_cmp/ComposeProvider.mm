@@ -79,12 +79,6 @@ public:
     uint32_t resizeSurface(int w, int h)
     {
 #if JUCE_MAC
-        // Create new surface but don't release old one yet.
-        // The old surface stays in 'surface' for display.
-        // The new surface goes in 'pendingSurface' for child to render to.
-        if (pendingSurface != nullptr)
-            CFRelease(pendingSurface);
-        
         surfaceWidth = w;
         surfaceHeight = h;
 
@@ -98,43 +92,19 @@ public:
             (id)kIOSurfaceIsGlobal: @YES
         };
         #pragma clang diagnostic pop
-        
-        pendingSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
-        
-        if (pendingSurface != nullptr)
+
+        IOSurfaceRef newSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+        if (newSurface != nullptr)
         {
-            //DBG("ComposeProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
-            //    + ", ID=" + juce::String(IOSurfaceGetID(pendingSurface)));
-            return IOSurfaceGetID(pendingSurface);
+            if (surface != nullptr)
+                CFRelease(surface);
+            surface = newSurface;
+            return IOSurfaceGetID(surface);
         }
         return 0;
 #else
         juce::ignoreUnused(w, h);
         return 0;
-#endif
-    }
-
-    /// Commit the pending surface - swap it to become the displayed surface
-    void commitPendingSurface()
-    {
-#if JUCE_MAC
-        if (pendingSurface != nullptr)
-        {
-            if (surface != nullptr)
-                CFRelease(surface);
-            surface = pendingSurface;
-            pendingSurface = nullptr;
-        }
-#endif
-    }
-
-    /// Get the pending surface (for child to render to during resize)
-    void* getPendingSurface() const
-    {
-#if JUCE_MAC
-        return pendingSurface;
-#else
-        return nullptr;
 #endif
     }
 
@@ -331,17 +301,11 @@ private:
             CFRelease(surface);
             surface = nullptr;
         }
-        if (pendingSurface != nullptr)
-        {
-            CFRelease(pendingSurface);
-            pendingSurface = nullptr;
-        }
 #endif
     }
 
 #if JUCE_MAC
     IOSurfaceRef surface = nullptr;
-    IOSurfaceRef pendingSurface = nullptr;
     pid_t childPid = 0;
 #endif
     int stdinPipeFD = -1;
@@ -359,19 +323,9 @@ bool ComposeProvider::createSurface(int width, int height)
     return pImpl->createSurface(width, height); 
 }
 
-uint32_t ComposeProvider::resizeSurface(int width, int height) 
-{ 
-    return pImpl->resizeSurface(width, height); 
-}
-
-void ComposeProvider::commitPendingSurface()
+uint32_t ComposeProvider::resizeSurface(int width, int height)
 {
-    pImpl->commitPendingSurface();
-}
-
-void* ComposeProvider::getPendingSurface() const
-{
-    return pImpl->getPendingSurface();
+    return pImpl->resizeSurface(width, height);
 }
 
 uint32_t ComposeProvider::getSurfaceID() const 
