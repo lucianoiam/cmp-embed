@@ -90,6 +90,7 @@ private:
     ReadyCallback readyCallback;
 
     bool childLaunched = false;
+    bool firstFrameReceived = false;  // True when UI has rendered first frame
     float backingScaleFactor = 1.0f;  // e.g., 2.0 for Retina displays
 
     // Optional loading state visuals

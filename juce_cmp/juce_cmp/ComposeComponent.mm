@@ -278,12 +278,12 @@ void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
 
 void ComposeComponent::paint(juce::Graphics& g)
 {
-    // Always fill background if color was specified (prevents flashing during transitions)
+    // Always fill background if color was specified (prevents artifacts during resize)
     if (!loadingBackgroundColor.isTransparent())
         g.fillAll(loadingBackgroundColor);
 
-    // Only draw loading preview before child process is ready
-    if (childLaunched)
+    // Only draw loading preview until first frame is received from UI
+    if (firstFrameReceived)
         return;
 
     // Draw preview image with aspect-ratio scaling
@@ -367,6 +367,10 @@ void ComposeComponent::launchChildProcess()
         eventReceiver.setEventHandler([this](const juce::ValueTree& tree) {
             if (eventCallback)
                 eventCallback(tree);
+        });
+        eventReceiver.setFirstFrameHandler([this]() {
+            firstFrameReceived = true;
+            repaint();  // Remove loading preview
         });
         eventReceiver.start(surfaceProvider.getStdoutPipeFD());
         
