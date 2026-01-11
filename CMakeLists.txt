@@ -61,6 +61,7 @@ endif()
 file(GLOB_RECURSE KOTLIN_SOURCES
     CONFIGURE_DEPENDS
     "${DEMO_UI_DIR}/composeApp/src/*.kt"
+    "${UI_DIR}/lib/src/*.kt"
 )
 list(APPEND KOTLIN_SOURCES "${DEMO_UI_DIR}/composeApp/build.gradle.kts")
 

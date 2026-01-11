@@ -42,7 +42,6 @@ class EventReceiver(
             while (running) {
                 try {
                     val eventType = input.read()
-                    System.err.println("[EventReceiver] Got event type: $eventType")
                     if (eventType < 0) {
                         running = false
                         kotlin.system.exitProcess(0)
@@ -52,12 +51,9 @@ class EventReceiver(
                         EVENT_TYPE_INPUT -> handleInputEvent()
                         EVENT_TYPE_CMP -> handleCmpEvent()
                         EVENT_TYPE_JUCE -> handleJuceEvent()
-                        else -> System.err.println("[EventReceiver] Unknown event type: $eventType")
                     }
                 } catch (e: Exception) {
-                    if (running) {
-                        System.err.println("[EventReceiver] Error: ${e.message}")
-                    }
+                    // Silently ignore exceptions when running
                 }
             }
         }, "EventReceiver")
