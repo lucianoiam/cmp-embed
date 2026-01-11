@@ -41,3 +41,8 @@ PRODUCTION READINESS
 [ ] Error recovery if child crashes
 [ ] Graceful shutdown handshake
 [ ] Security sandbox considerations
+[ ] Replace kIOSurfaceIsGlobal with Mach ports for cross-process IOSurface sharing
+    - kIOSurfaceIsGlobal deprecated since macOS 10.11 (security hole - any process can lookup by ID)
+    - Modern approach: IOSurfaceCreateMachPort() + IOSurfaceLookupFromMachPort()
+    - Requires passing mach port via IPC instead of integer ID on command line
+    - Syphon framework has same issue, still using deprecated API
