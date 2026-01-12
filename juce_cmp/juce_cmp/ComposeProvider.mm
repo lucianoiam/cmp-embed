@@ -32,10 +32,10 @@ class ComposeProvider::Impl
 {
 public:
     Impl() = default;
-    
+
     ~Impl()
     {
-        stopChild();
+        child.stop();
         releaseSurface();
     }
 
@@ -140,157 +140,32 @@ public:
             return false;
         }
 
-        // Verify executable exists using JUCE File API
-        juce::File execFile(executable);
-        if (!execFile.existsAsFile())
-        {
-            DBG("ComposeProvider: Executable not found: " + executable);
-            return false;
-        }
-        
-        // Capture surface ID BEFORE fork - after fork the IOSurfaceRef pointer
-        // is invalid in the child process context
         uint32_t surfaceID = IOSurfaceGetID(surface);
-        std::string surfaceArg = "--iosurface-id=" + std::to_string(surfaceID);
-        std::string execPath = executable.toStdString();
-        std::string workDir = workingDir.toStdString();
-
-        // Create pipe for stdin (host→UI input events)
-        int stdinPipes[2];
-        if (pipe(stdinPipes) != 0)
-        {
-            DBG("ComposeProvider: Failed to create stdin pipe");
-            return false;
-        }
-
-        // Create pipe for stdout (UI→Host IPC: JuceValueTree messages)
-        int stdoutPipes[2];
-        if (pipe(stdoutPipes) != 0)
-        {
-            DBG("ComposeProvider: Failed to create stdout pipe");
-            close(stdinPipes[0]);
-            close(stdinPipes[1]);
-            return false;
-        }
-        std::string scaleArg = "--scale=" + std::to_string(scale);
-
-        childPid = fork();
-        
-        if (childPid == 0)
-        {
-            // Child process
-            close(stdinPipes[1]);   // Close write end of stdin pipe
-            close(stdoutPipes[0]);  // Close read end of stdout pipe
-            
-            dup2(stdinPipes[0], STDIN_FILENO);   // Redirect stdin
-            dup2(stdoutPipes[1], STDOUT_FILENO); // Redirect stdout
-            close(stdinPipes[0]);
-            close(stdoutPipes[1]);
-
-            if (!workDir.empty())
-                chdir(workDir.c_str());
-
-            execl(execPath.c_str(),
-                  execPath.c_str(),
-                  surfaceArg.c_str(),
-                  scaleArg.c_str(),
-                  nullptr);
-            
-            // If exec fails, exit child
-            _exit(1);
-        }
-        else if (childPid > 0)
-        {
-            // Parent process
-            close(stdinPipes[0]);   // Close read end of stdin pipe
-            close(stdoutPipes[1]);  // Close write end of stdout pipe
-            
-            stdinPipeFD = stdinPipes[1];
-            stdoutPipeFD = stdoutPipes[0];
-
-            //DBG("ComposeProvider: Launched child PID " + juce::String(childPid)
-            //    + " with surface ID " + juce::String(IOSurfaceGetID(surface)));
-            return true;
-        }
-        else
-        {
-            DBG("ComposeProvider: Fork failed");
-            close(stdinPipes[0]);
-            close(stdinPipes[1]);
-            close(stdoutPipes[0]);
-            close(stdoutPipes[1]);
-            return false;
-        }
+        return child.launch(executable.toStdString(), surfaceID, scale, workingDir.toStdString());
 #else
-        juce::ignoreUnused(executable, workingDir);
+        juce::ignoreUnused(executable, scale, workingDir);
         return false;
 #endif
     }
 
     void stopChild()
     {
-#if JUCE_MAC
-        // Close stdin pipe first - signals EOF to child, causing it to exit
-        if (stdinPipeFD >= 0)
-        {
-            close(stdinPipeFD);
-            stdinPipeFD = -1;
-        }
-        
-        // Wait for child to exit with timeout, then force kill
-        if (childPid > 0)
-        {
-            int status;
-            // Give child 200ms to exit gracefully
-            for (int i = 0; i < 20; ++i)
-            {
-                pid_t result = waitpid(childPid, &status, WNOHANG);
-                if (result != 0) {
-                    // Child exited or error
-                    childPid = 0;
-                    break;
-                }
-                usleep(10000);  // 10ms
-            }
-            
-            // If still alive, force kill
-            if (childPid > 0)
-            {
-                kill(childPid, SIGKILL);
-                waitpid(childPid, &status, 0);
-                childPid = 0;
-            }
-        }
-        
-        // Close stdout pipe after child has exited
-        if (stdoutPipeFD >= 0)
-        {
-            close(stdoutPipeFD);
-            stdoutPipeFD = -1;
-        }
-#endif
+        child.stop();
     }
 
     bool isChildRunning() const
     {
-#if JUCE_MAC
-        if (childPid <= 0) 
-            return false;
-        // Check if process exists without sending a signal
-        return kill(childPid, 0) == 0;
-#else
-        return false;
-#endif
+        return child.isRunning();
     }
 
     int getInputPipeFD() const
     {
-        return stdinPipeFD;
+        return child.getStdinPipeFD();
     }
 
     int getStdoutPipeFD() const
     {
-        return stdoutPipeFD;
+        return child.getStdoutPipeFD();
     }
 
 private:
@@ -313,10 +188,8 @@ private:
 #if JUCE_MAC
     IOSurfaceRef surface = nullptr;
     IOSurfaceRef previousSurface = nullptr;  // Keep alive during resize transition
-    pid_t childPid = 0;
 #endif
-    int stdinPipeFD = -1;
-    int stdoutPipeFD = -1;
+    ChildProcess child;
     int surfaceWidth = 0;
     int surfaceHeight = 0;
 };

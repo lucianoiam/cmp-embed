@@ -4,6 +4,7 @@
 #include "juce_cmp.h"
 
 // Include all C++ implementation files (can be compiled in .mm on macOS)
+#include "juce_cmp/ChildProcess.cpp"
 #include "juce_cmp/Ipc.cpp"
 
 // Include all Objective-C++ implementation files
