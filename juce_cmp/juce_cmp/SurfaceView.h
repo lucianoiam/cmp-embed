@@ -57,8 +57,8 @@ public:
     /** Detach from parent. */
     void detachFromParent();
 
-    /** Update the view frame. */
-    void setFrame(int x, int y, int width, int height, bool parentFlipped);
+    /** Update the view frame (queries parent's flipped state internally). */
+    void setFrame(int x, int y, int width, int height);
 
     /** Set callback for resize requests from the view. */
     void setResizeCallback(ResizeCallback callback) { resizeCallback_ = callback; }

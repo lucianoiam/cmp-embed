@@ -1,15 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-/**
- * ComposeComponent - JUCE Component that displays Compose UI via shared surface.
- *
- * Architecture:
- * - SurfaceView: Native view for display (NSView on macOS)
- * - ComposeComponent: Transparent JUCE component layered on top for input handling
- */
 #include "ComposeComponent.h"
-#include "SurfaceView.h"
 #include <juce_core/juce_core.h>
 
 #if JUCE_MAC
@@ -21,16 +13,9 @@ namespace juce_cmp
 
 ComposeComponent::ComposeComponent()
 {
-    setOpaque(false);  // Allow parent to show through until child renders
+    setOpaque(false);
     setWantsKeyboardFocus(true);
     setInterceptsMouseClicks(true, true);
-}
-
-void ComposeComponent::setLoadingPreview(const juce::Image& image, juce::Colour backgroundColor)
-{
-    loadingPreview = image;
-    loadingBackgroundColor = backgroundColor;
-    repaint();
 }
 
 ComposeComponent::~ComposeComponent()
@@ -38,50 +23,50 @@ ComposeComponent::~ComposeComponent()
     if (auto* topLevel = getTopLevelComponent())
         topLevel->removeComponentListener(this);
 
-    // Stop child process first - this closes stdin (signaling EOF to child),
-    // then waits for child to exit. Once child exits, it closes its end of the
-    // FIFO, which unblocks the IPC reader thread.
-    surfaceProvider.stopChild();
+    provider_.stop();
+}
 
-    // Now stop IPC - should exit immediately since child closed FIFO
-    ipc.stop();
-
-    detachSurfaceView();
+void ComposeComponent::setLoadingPreview(const juce::Image& image, juce::Colour backgroundColor)
+{
+    loadingPreview_ = image;
+    loadingBackgroundColor_ = backgroundColor;
+    repaint();
 }
 
 void ComposeComponent::parentHierarchyChanged()
 {
-    tryLaunchChild();
-    if (childLaunched && getPeer() != nullptr)
-        attachSurfaceView();
+    tryLaunch();
+
+    if (launched_ && getPeer() != nullptr)
+    {
+        auto* peer = getPeer();
+        provider_.attachView(peer->getNativeHandle());
+        updateViewBounds();
+    }
 }
 
 void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
 {
-    updateSurfaceViewBounds();
+    updateViewBounds();
 }
 
 void ComposeComponent::paint(juce::Graphics& g)
 {
-    // Always fill background if color was specified (prevents artifacts during resize)
-    if (!loadingBackgroundColor.isTransparent())
-        g.fillAll(loadingBackgroundColor);
+    if (!loadingBackgroundColor_.isTransparent())
+        g.fillAll(loadingBackgroundColor_);
 
-    // Only draw loading preview until first frame is received from UI
-    if (firstFrameReceived)
+    if (firstFrameReceived_)
         return;
 
-    // Draw preview image with aspect-ratio scaling
-    if (loadingPreview.isValid())
+    if (loadingPreview_.isValid())
     {
         auto bounds = getLocalBounds().toFloat();
-        float imageAspect = (float)loadingPreview.getWidth() / loadingPreview.getHeight();
+        float imageAspect = (float)loadingPreview_.getWidth() / loadingPreview_.getHeight();
         float boundsAspect = bounds.getWidth() / bounds.getHeight();
 
         float drawWidth, drawHeight, drawX, drawY;
         if (imageAspect > boundsAspect)
         {
-            // Image is wider - fit to width
             drawWidth = bounds.getWidth();
             drawHeight = bounds.getWidth() / imageAspect;
             drawX = 0;
@@ -89,32 +74,26 @@ void ComposeComponent::paint(juce::Graphics& g)
         }
         else
         {
-            // Image is taller - fit to height
             drawHeight = bounds.getHeight();
             drawWidth = bounds.getHeight() * imageAspect;
             drawX = (bounds.getWidth() - drawWidth) / 2;
             drawY = 0;
         }
 
-        g.drawImage(loadingPreview,
+        g.drawImage(loadingPreview_,
                     drawX, drawY, drawWidth, drawHeight,
-                    0, 0, loadingPreview.getWidth(), loadingPreview.getHeight());
+                    0, 0, loadingPreview_.getWidth(), loadingPreview_.getHeight());
     }
 }
 
-void ComposeComponent::tryLaunchChild()
+void ComposeComponent::tryLaunch()
 {
-    if (!childLaunched && getPeer() != nullptr && !getLocalBounds().isEmpty())
-        launchChildProcess();
-}
+    if (launched_ || getPeer() == nullptr || getLocalBounds().isEmpty())
+        return;
 
-void ComposeComponent::launchChildProcess()
-{
-    if (childLaunched) return;
     auto bounds = getLocalBounds();
-    if (bounds.isEmpty()) return;
-    
-    // Get backing scale factor from the native window (e.g., 2.0 for Retina)
+
+    // Get backing scale factor
     float scale = 1.0f;
 #if JUCE_MAC
     if (auto* peer = getPeer()) {
@@ -125,119 +104,67 @@ void ComposeComponent::launchChildProcess()
         }
     }
 #endif
-    backingScaleFactor = scale;
-    
-    // Create surface at pixel dimensions (points * scale)
-    int pixelW = (int)(bounds.getWidth() * scale);
-    int pixelH = (int)(bounds.getHeight() * scale);
 
-    if (!surfaceProvider.createSurface(pixelW, pixelH))
-        return;
-
-    // Find the CMP UI launcher bundled inside this plugin's MacOS folder.
-    // Structure: PluginName.app/Contents/MacOS/ui
-    // or:        PluginName.component/Contents/MacOS/ui
+    // Find UI executable
     auto execFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-    auto macosDir = execFile.getParentDirectory();  // MacOS
+    auto macosDir = execFile.getParentDirectory();
     auto rendererPath = macosDir.getChildFile("ui");
-    
+
     if (!rendererPath.existsAsFile())
         return;
 
-    if (surfaceProvider.launchChild(rendererPath.getFullPathName().toStdString(), backingScaleFactor))
+    // Set up callbacks before launch
+    provider_.setEventCallback([this](const juce::ValueTree& tree) {
+        if (eventCallback_)
+            eventCallback_(tree);
+    });
+
+    provider_.setFirstFrameCallback([this]() {
+        firstFrameReceived_ = true;
+        repaint();
+        if (firstFrameCallback_)
+            firstFrameCallback_();
+    });
+
+    if (provider_.launch(rendererPath.getFullPathName().toStdString(),
+                         bounds.getWidth(), bounds.getHeight(), scale))
     {
-        ipc.setWriteFD(surfaceProvider.getInputPipeFD());
-        ipc.setReadFD(surfaceProvider.getStdoutPipeFD());
+        launched_ = true;
 
-        // Set up UI→Host message receiver
-        ipc.setEventHandler([this](const juce::ValueTree& tree) {
-            if (eventCallback)
-                eventCallback(tree);
-        });
-        ipc.setFirstFrameHandler([this]() {
-            firstFrameReceived = true;
-            repaint();  // Remove loading preview
-            if (firstFrameCallback)
-                firstFrameCallback();
-        });
-        ipc.startReceiving();
-        
-        childLaunched = true;
-        attachSurfaceView();
+        if (auto* peer = getPeer())
+        {
+            provider_.attachView(peer->getNativeHandle());
+            updateViewBounds();
+        }
 
-        // Notify that child is ready to receive events
-        if (readyCallback)
-            readyCallback();
+        if (readyCallback_)
+            readyCallback_();
     }
 }
 
 void ComposeComponent::resized()
 {
-    tryLaunchChild();
-    if (childLaunched && surfaceView.isValid())
+    tryLaunch();
+
+    if (launched_)
     {
-        updateSurfaceViewBounds();
-        // Trigger resize - the callback will handle surface recreation
+        updateViewBounds();
         auto bounds = getLocalBounds();
-        handleResize(bounds.getWidth(), bounds.getHeight());
+        provider_.resize(bounds.getWidth(), bounds.getHeight());
     }
 }
 
-void ComposeComponent::handleResize(int width, int height)
+void ComposeComponent::updateViewBounds()
 {
-    if (width <= 0 || height <= 0)
+    if (!launched_)
         return;
 
-    int pixelW = (int)(width * backingScaleFactor);
-    int pixelH = (int)(height * backingScaleFactor);
-    uint32_t newSurfaceID = surfaceProvider.resizeSurface(pixelW, pixelH);
-    if (newSurfaceID != 0)
-    {
-        auto e = InputEventFactory::resize(pixelW, pixelH, backingScaleFactor, newSurfaceID);
-        ipc.sendInput(e);
-        // Set pending surface - will swap on next frame
-        surfaceView.setPendingSurface(surfaceProvider.getNativeSurface());
-    }
-}
-
-void ComposeComponent::attachSurfaceView()
-{
     auto* peer = getPeer();
-    if (!peer) return;
-    void* peerView = peer->getNativeHandle();
-    if (!peerView) return;
-
-    if (!surfaceView.isValid())
-    {
-        surfaceView.create();
-        surfaceView.setSurface(surfaceProvider.getNativeSurface());
-        surfaceView.setBackingScale(backingScaleFactor);
-    }
-
-    surfaceView.attachToParent(peerView);
-    updateSurfaceViewBounds();
-}
-
-void ComposeComponent::detachSurfaceView()
-{
-    surfaceView.destroy();
-}
-
-void ComposeComponent::updateSurfaceViewBounds()
-{
-    if (!surfaceView.isValid()) return;
-    auto* peer = getPeer();
-    if (!peer) return;
-
-#if JUCE_MAC
-    NSView* peerView = (NSView*)peer->getNativeHandle();
-    bool isFlipped = peerView.isFlipped;
-#else
-    bool isFlipped = true;
-#endif
+    if (!peer)
+        return;
 
     auto topLeftInPeer = peer->getComponent().getLocalPoint(this, juce::Point<int>(0, 0));
-    surfaceView.setFrame(topLeftInPeer.x, topLeftInPeer.y, getWidth(), getHeight(), isFlipped);
+    provider_.updateViewBounds(topLeftInPeer.x, topLeftInPeer.y, getWidth(), getHeight());
 }
 
 int ComposeComponent::getModifiers() const
@@ -265,37 +192,37 @@ void ComposeComponent::mouseExit(const juce::MouseEvent& event) { juce::ignoreUn
 void ComposeComponent::mouseMove(const juce::MouseEvent& event)
 {
     auto e = InputEventFactory::mouseMove(event.x, event.y, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 void ComposeComponent::mouseDown(const juce::MouseEvent& event)
 {
     auto e = InputEventFactory::mouseButton(event.x, event.y, mapMouseButton(event), true, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 void ComposeComponent::mouseUp(const juce::MouseEvent& event)
 {
     auto e = InputEventFactory::mouseButton(event.x, event.y, mapMouseButton(event), false, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 void ComposeComponent::mouseDrag(const juce::MouseEvent& event)
 {
     auto e = InputEventFactory::mouseMove(event.x, event.y, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 void ComposeComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
     auto e = InputEventFactory::mouseScroll(event.x, event.y, wheel.deltaX, wheel.deltaY, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 bool ComposeComponent::keyPressed(const juce::KeyPress& key)
 {
     auto e = InputEventFactory::key(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers());
-    ipc.sendInput(e);
+    provider_.sendInput(e);
     return true;
 }
 
@@ -305,15 +232,14 @@ void ComposeComponent::focusGained(FocusChangeType cause)
 {
     juce::ignoreUnused(cause);
     auto e = InputEventFactory::focus(true);
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 void ComposeComponent::focusLost(FocusChangeType cause)
 {
     juce::ignoreUnused(cause);
     auto e = InputEventFactory::focus(false);
-    ipc.sendInput(e);
+    provider_.sendInput(e);
 }
 
 }  // namespace juce_cmp
-

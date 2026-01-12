@@ -232,7 +232,7 @@ void SurfaceView::detachFromParent()
 #endif
 }
 
-void SurfaceView::setFrame(int x, int y, int width, int height, bool parentFlipped)
+void SurfaceView::setFrame(int x, int y, int width, int height)
 {
 #if __APPLE__
     if (!nativeView_)
@@ -244,7 +244,7 @@ void SurfaceView::setFrame(int x, int y, int width, int height, bool parentFlipp
         return;
 
     NSRect frame;
-    if (parentFlipped)
+    if (parent.isFlipped)
     {
         frame = NSMakeRect(x, y, width, height);
     }
@@ -262,7 +262,6 @@ void SurfaceView::setFrame(int x, int y, int width, int height, bool parentFlipp
     (void)y;
     (void)width;
     (void)height;
-    (void)parentFlipped;
 #endif
 }
 

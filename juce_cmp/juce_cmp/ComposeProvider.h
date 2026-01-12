@@ -5,7 +5,10 @@
 
 #include "ChildProcess.h"
 #include "Surface.h"
+#include "SurfaceView.h"
+#include "Ipc.h"
 #include <juce_core/juce_core.h>
+#include <juce_data_structures/juce_data_structures.h>
 #include <cstdint>
 #include <string>
 #include <functional>
@@ -14,52 +17,53 @@ namespace juce_cmp
 {
 
 /**
- * ComposeProvider - Creates shared surfaces and manages the child UI process.
+ * ComposeProvider - Orchestrates Compose UI embedding.
  *
- * On macOS: Uses IOSurface for zero-copy GPU sharing
- * On Windows: Will use DXGI shared textures (TODO)
- * On Linux: Will use shared memory or Vulkan external memory (TODO)
+ * Owns and coordinates: Surface, SurfaceView, ChildProcess, Ipc.
+ * Pure C++ - no platform-specific code.
  */
 class ComposeProvider
 {
 public:
+    using EventCallback = std::function<void(const juce::ValueTree&)>;
+    using FirstFrameCallback = std::function<void()>;
+
     ComposeProvider();
     ~ComposeProvider();
 
-    /** Create a shared surface with the given dimensions. */
-    bool createSurface(int width, int height);
+    // Callbacks
+    void setEventCallback(EventCallback callback) { eventCallback_ = std::move(callback); }
+    void setFirstFrameCallback(FirstFrameCallback callback) { firstFrameCallback_ = std::move(callback); }
 
-    /** Resize the surface. Returns the new surface ID. */
-    uint32_t resizeSurface(int width, int height);
+    // Lifecycle
+    bool launch(const std::string& executable, int width, int height, float scale);
+    void stop();
+    bool isRunning() const;
 
-    /** Get the current surface ID (passed to child process). */
-    uint32_t getSurfaceID() const;
+    // View management (called by Component)
+    void attachView(void* parentNativeHandle);
+    void detachView();
+    void updateViewBounds(int x, int y, int width, int height);
 
-    /** Get the native surface handle (IOSurfaceRef on macOS). */
-    void* getNativeSurface() const;
+    // Resize handling
+    void resize(int width, int height);
 
-    /** Get surface dimensions. */
-    int getWidth() const;
-    int getHeight() const;
+    // IPC
+    void sendInput(InputEvent& event);
+    void sendEvent(const juce::ValueTree& tree);
 
-    /** Launch the child Compose UI process with scale factor for Retina support. */
-    bool launchChild(const std::string& executable, float scale = 1.0f, const std::string& workingDir = "");
-
-    /** Stop the child process. */
-    void stopChild();
-
-    /** Check if child is running. */
-    bool isChildRunning() const;
-
-    /** Get the stdin pipe file descriptor for input forwarding. */
-    int getInputPipeFD() const;
-
-    /** Get the stdout pipe file descriptor for reading UI messages. */
-    int getStdoutPipeFD() const;
+    // State
+    float getScale() const { return scale_; }
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> pImpl;
+    Surface surface_;
+    SurfaceView view_;
+    ChildProcess child_;
+    Ipc ipc_;
+
+    float scale_ = 1.0f;
+    EventCallback eventCallback_;
+    FirstFrameCallback firstFrameCallback_;
 };
 
 }  // namespace juce_cmp

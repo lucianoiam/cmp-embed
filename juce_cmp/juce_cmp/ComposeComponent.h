@@ -6,8 +6,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include "ComposeProvider.h"
-#include "SurfaceView.h"
-#include "Ipc.h"
 #include <functional>
 
 namespace juce_cmp
@@ -16,9 +14,10 @@ namespace juce_cmp
 /**
  * ComposeComponent - JUCE Component that displays Compose Multiplatform UI.
  *
- * Uses a native NSView subview for zero-copy IOSurface display, while the JUCE
- * Component itself (being "invisible") catches all input events and forwards them
- * to the child process.
+ * Thin wrapper that provides JUCE integration:
+ * - Forwards input events to ComposeProvider
+ * - Provides peer handle and bounds for view attachment
+ * - Handles loading preview display
  */
 class ComposeComponent : public juce::Component,
                            private juce::ComponentListener
@@ -27,29 +26,27 @@ public:
     ComposeComponent();
     ~ComposeComponent() override;
 
-    /// Set callback for when UI sends events (JuceValueTree → ValueTree)
+    /// Set callback for when UI sends events
     using EventCallback = std::function<void(const juce::ValueTree& tree)>;
-    void onEvent(EventCallback callback) { eventCallback = std::move(callback); }
+    void onEvent(EventCallback callback) { eventCallback_ = std::move(callback); }
 
     /// Set callback for when the child process is ready to receive events
     using ReadyCallback = std::function<void()>;
-    void onProcessReady(ReadyCallback callback) { readyCallback = std::move(callback); }
+    void onProcessReady(ReadyCallback callback) { readyCallback_ = std::move(callback); }
 
     /// Set callback for when the UI has rendered its first frame
     using FirstFrameCallback = std::function<void()>;
-    void onFirstFrame(FirstFrameCallback callback) { firstFrameCallback = std::move(callback); }
+    void onFirstFrame(FirstFrameCallback callback) { firstFrameCallback_ = std::move(callback); }
 
-    /// Send an event of type JUCE from host to UI (ValueTree payload)
-    void sendEvent(const juce::ValueTree& tree) { ipc.sendEvent(tree); }
+    /// Send an event to the UI
+    void sendEvent(const juce::ValueTree& tree) { provider_.sendEvent(tree); }
 
-    /// Set an image to display while the child process loads (optional)
-    /// @param image The preview image to show
-    /// @param backgroundColor Background color behind the image (default: transparent)
+    /// Set an image to display while the child process loads
     void setLoadingPreview(const juce::Image& image,
                            juce::Colour backgroundColor = juce::Colour());
 
     /// Returns true if the Compose child process has launched
-    bool isProcessReady() const { return childLaunched; }
+    bool isProcessReady() const { return launched_; }
 
     void resized() override;
     void paint(juce::Graphics& g) override;
@@ -75,30 +72,22 @@ public:
 private:
     void componentMovedOrResized(juce::Component& component, bool wasMoved, bool wasResized) override;
 
-    void tryLaunchChild();
-    void launchChildProcess();
-    void handleResize(int width, int height);
+    void tryLaunch();
+    void updateViewBounds();
     int getModifiers() const;
     int mapMouseButton(const juce::MouseEvent& event) const;
 
-    ComposeProvider surfaceProvider;
-    Ipc ipc;
-    EventCallback eventCallback;
-    ReadyCallback readyCallback;
-    FirstFrameCallback firstFrameCallback;
+    ComposeProvider provider_;
+    EventCallback eventCallback_;
+    ReadyCallback readyCallback_;
+    FirstFrameCallback firstFrameCallback_;
 
-    bool childLaunched = false;
-    bool firstFrameReceived = false;  // True when UI has rendered first frame
-    float backingScaleFactor = 1.0f;  // e.g., 2.0 for Retina displays
+    bool launched_ = false;
+    bool firstFrameReceived_ = false;
 
-    // Optional loading state visuals
-    juce::Image loadingPreview;
-    juce::Colour loadingBackgroundColor;
-
-    SurfaceView surfaceView;
-    void attachSurfaceView();
-    void detachSurfaceView();
-    void updateSurfaceViewBounds();
+    // Loading state visuals
+    juce::Image loadingPreview_;
+    juce::Colour loadingBackgroundColor_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComposeComponent)
 };
