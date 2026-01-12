@@ -7,7 +7,7 @@
 
 namespace juce_cmp
 {
-namespace helpers
+namespace ui_helpers
 {
 
 /**
@@ -30,5 +30,5 @@ inline void hideResizeHandle(juce::AudioProcessorEditor& editor)
     }
 }
 
-}  // namespace helpers
+}  // namespace ui_helpers
 }  // namespace juce_cmp

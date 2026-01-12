@@ -34,7 +34,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 │  JUCE Plugin (uses juce_cmp module)                     │
 │  - ComposeComponent creates shared GPU surface          │
 │  - SurfaceView (NSView) displays via CALayer            │
-│  - CVDisplayLink for vsync-synchronized refresh         │
+│  - CADisplayLink for vsync-synchronized refresh         │
 │  - Transparent JUCE component captures input events     │
 │  - Launches Compose UI as child process                 │
 └─────────────────┬───────────────────────────────────────┘
@@ -69,9 +69,10 @@ juce_cmp/                     # JUCE module (include in your plugin)
   juce_cmp/                   # Implementation files
     ComposeComponent.h/mm     # JUCE Component displaying Compose UI
     ComposeProvider.h/mm      # Creates shared surface, manages child process
-    InputSender.h/cpp         # Sends input events to child via stdin
-    EventReceiver.h           # Receives ValueTree messages from UI via stdout
-    ipc_protocol.h            # IPC Protocol - binary events (16 bytes)
+    Ipc.h/cpp                 # Bidirectional IPC (ValueTree messages)
+    InputEvent.h              # Factory functions for input events
+    ipc_protocol.h            # IPC protocol - binary events (16 bytes)
+    ui_helpers.h              # UI utilities (e.g., hideResizeHandle)
     LoadingPreview.h          # Loading placeholder image
 ```
 
@@ -119,11 +120,10 @@ juce_cmp_ui/                  # Kotlin Multiplatform library
     build.gradle.kts          # Library build config
     src/jvmMain/
       kotlin/juce_cmp/
-        Library.kt           # Library initialization (must call init() first)
-        events/
-          EventSender.kt       # Sends JuceValueTree to host (UI → host)
-          EventReceiver.kt     # Receives events from host (host → UI)
-          JuceValueTree.kt     # JUCE-compatible ValueTree implementation
+        Library.kt            # Library initialization (must call init() first)
+        ipc/
+          Ipc.kt              # Bidirectional IPC channel
+          JuceValueTree.kt    # JUCE-compatible ValueTree implementation
         input/
           InputDispatcher.kt   # Injects events into ComposeScene
           InputMapper.kt       # Maps protocol events to Compose

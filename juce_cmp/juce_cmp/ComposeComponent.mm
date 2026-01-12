@@ -179,11 +179,11 @@ ComposeComponent::~ComposeComponent()
 
     // Stop child process first - this closes stdin (signaling EOF to child),
     // then waits for child to exit. Once child exits, it closes its end of the
-    // FIFO, which unblocks the EventReceiver thread.
+    // FIFO, which unblocks the IPC reader thread.
     surfaceProvider.stopChild();
 
-    // Now stop EventReceiver - should exit immediately since child closed FIFO
-    eventReceiver.stop();
+    // Now stop IPC - should exit immediately since child closed FIFO
+    ipc.stop();
 
 #if JUCE_MAC
     detachNativeView();
@@ -291,20 +291,21 @@ void ComposeComponent::launchChildProcess()
 
     if (surfaceProvider.launchChild(rendererPath.getFullPathName().toStdString(), backingScaleFactor))
     {
-        inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
-        
-        // Set up UI→Host message receiver (reads from child's stdout)
-        eventReceiver.setEventHandler([this](const juce::ValueTree& tree) {
+        ipc.setWriteFD(surfaceProvider.getInputPipeFD());
+        ipc.setReadFD(surfaceProvider.getStdoutPipeFD());
+
+        // Set up UI→Host message receiver
+        ipc.setEventHandler([this](const juce::ValueTree& tree) {
             if (eventCallback)
                 eventCallback(tree);
         });
-        eventReceiver.setFirstFrameHandler([this]() {
+        ipc.setFirstFrameHandler([this]() {
             firstFrameReceived = true;
             repaint();  // Remove loading preview
             if (firstFrameCallback)
                 firstFrameCallback();
         });
-        eventReceiver.start(surfaceProvider.getStdoutPipeFD());
+        ipc.startReceiving();
         
         childLaunched = true;
 #if JUCE_MAC
@@ -348,7 +349,7 @@ void ComposeComponent::attachNativeView()
 
         // Set up resize callback
         ComposeProvider* provider = &surfaceProvider;
-        InputSender* sender = &inputSender;
+        Ipc* ipcPtr = &ipc;
         float* scalePtr = &backingScaleFactor;
         void** nativeViewPtr = &nativeView;
         view.resizeCallback = ^(NSSize size) {
@@ -357,8 +358,9 @@ void ComposeComponent::attachNativeView()
             int pixelH = (int)(size.height * scale);
             uint32_t newSurfaceID = provider->resizeSurface(pixelW, pixelH);
             if (newSurfaceID != 0) {
-                sender->sendResize(pixelW, pixelH, scale, newSurfaceID);
-                // Set pending surface - will swap on next CVDisplayLink tick
+                auto e = InputEventFactory::resize(pixelW, pixelH, scale, newSurfaceID);
+                ipcPtr->sendInput(e);
+                // Set pending surface - will swap on next CADisplayLink tick
                 // This gives child one frame to render to new surface
                 if (*nativeViewPtr) {
                     SurfaceView* v = (__bridge SurfaceView*)*nativeViewPtr;
@@ -440,15 +442,59 @@ int ComposeComponent::mapMouseButton(const juce::MouseEvent& event) const
 
 void ComposeComponent::mouseEnter(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
 void ComposeComponent::mouseExit(const juce::MouseEvent& event) { juce::ignoreUnused(event); }
-void ComposeComponent::mouseMove(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
-void ComposeComponent::mouseDown(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), true, getModifiers()); }
-void ComposeComponent::mouseUp(const juce::MouseEvent& event) { inputSender.sendMouseButton(event.x, event.y, mapMouseButton(event), false, getModifiers()); }
-void ComposeComponent::mouseDrag(const juce::MouseEvent& event) { inputSender.sendMouseMove(event.x, event.y, getModifiers()); }
-void ComposeComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) { inputSender.sendMouseScroll(event.x, event.y, wheel.deltaX * 100.0f, wheel.deltaY * 100.0f, getModifiers()); }
-bool ComposeComponent::keyPressed(const juce::KeyPress& key) { inputSender.sendKey(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers()); return true; }
+
+void ComposeComponent::mouseMove(const juce::MouseEvent& event)
+{
+    auto e = InputEventFactory::mouseMove(event.x, event.y, getModifiers());
+    ipc.sendInput(e);
+}
+
+void ComposeComponent::mouseDown(const juce::MouseEvent& event)
+{
+    auto e = InputEventFactory::mouseButton(event.x, event.y, mapMouseButton(event), true, getModifiers());
+    ipc.sendInput(e);
+}
+
+void ComposeComponent::mouseUp(const juce::MouseEvent& event)
+{
+    auto e = InputEventFactory::mouseButton(event.x, event.y, mapMouseButton(event), false, getModifiers());
+    ipc.sendInput(e);
+}
+
+void ComposeComponent::mouseDrag(const juce::MouseEvent& event)
+{
+    auto e = InputEventFactory::mouseMove(event.x, event.y, getModifiers());
+    ipc.sendInput(e);
+}
+
+void ComposeComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+{
+    auto e = InputEventFactory::mouseScroll(event.x, event.y, wheel.deltaX, wheel.deltaY, getModifiers());
+    ipc.sendInput(e);
+}
+
+bool ComposeComponent::keyPressed(const juce::KeyPress& key)
+{
+    auto e = InputEventFactory::key(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers());
+    ipc.sendInput(e);
+    return true;
+}
+
 bool ComposeComponent::keyStateChanged(bool isKeyDown) { juce::ignoreUnused(isKeyDown); return false; }
-void ComposeComponent::focusGained(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(true); }
-void ComposeComponent::focusLost(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(false); }
+
+void ComposeComponent::focusGained(FocusChangeType cause)
+{
+    juce::ignoreUnused(cause);
+    auto e = InputEventFactory::focus(true);
+    ipc.sendInput(e);
+}
+
+void ComposeComponent::focusLost(FocusChangeType cause)
+{
+    juce::ignoreUnused(cause);
+    auto e = InputEventFactory::focus(false);
+    ipc.sendInput(e);
+}
 
 }  // namespace juce_cmp
 

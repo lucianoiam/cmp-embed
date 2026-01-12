@@ -33,8 +33,8 @@ namespace juce_cmp
 
 // Internal implementation headers
 #include "juce_cmp/ipc_protocol.h"
-#include "juce_cmp/InputSender.h"
-#include "juce_cmp/EventReceiver.h"
+#include "juce_cmp/InputEvent.h"
+#include "juce_cmp/Ipc.h"
 #include "juce_cmp/ComposeProvider.h"
 #include "juce_cmp/ComposeComponent.h"
-#include "juce_cmp/helpers.h"
+#include "juce_cmp/ui_helpers.h"

@@ -4,4 +4,4 @@
 #include "juce_cmp.h"
 
 // Include all C++ implementation files
-#include "juce_cmp/InputSender.cpp"
+#include "juce_cmp/Ipc.cpp"

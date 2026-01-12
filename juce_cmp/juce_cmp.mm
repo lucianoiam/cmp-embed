@@ -4,7 +4,7 @@
 #include "juce_cmp.h"
 
 // Include all C++ implementation files (can be compiled in .mm on macOS)
-#include "juce_cmp/InputSender.cpp"
+#include "juce_cmp/Ipc.cpp"
 
 // Include all Objective-C++ implementation files
 #include "juce_cmp/ComposeProvider.mm"

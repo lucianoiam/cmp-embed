@@ -15,7 +15,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     setSize(768, 480);
     setResizable(true, true);  // Keep native corner for AU plugin compatibility
     setResizeLimits(400, 300, 2048, 2048);
-    juce_cmp::helpers::hideResizeHandle(*this);
+    juce_cmp::ui_helpers::hideResizeHandle(*this);
 
     // Set up loading preview from embedded data
     // NOTE: Background color should match Compose UI background in UserInterface.kt

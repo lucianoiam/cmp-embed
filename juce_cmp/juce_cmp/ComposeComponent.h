@@ -6,8 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include "ComposeProvider.h"
-#include "InputSender.h"
-#include "EventReceiver.h"
+#include "Ipc.h"
 #include <functional>
 
 namespace juce_cmp
@@ -40,7 +39,7 @@ public:
     void onFirstFrame(FirstFrameCallback callback) { firstFrameCallback = std::move(callback); }
 
     /// Send an event of type JUCE from host to UI (ValueTree payload)
-    void sendEvent(const juce::ValueTree& tree) { inputSender.sendEvent(tree); }
+    void sendEvent(const juce::ValueTree& tree) { ipc.sendEvent(tree); }
 
     /// Set an image to display while the child process loads (optional)
     /// @param image The preview image to show
@@ -81,8 +80,7 @@ private:
     int mapMouseButton(const juce::MouseEvent& event) const;
 
     ComposeProvider surfaceProvider;
-    InputSender inputSender;
-    EventReceiver eventReceiver;
+    Ipc ipc;
     EventCallback eventCallback;
     ReadyCallback readyCallback;
     FirstFrameCallback firstFrameCallback;
