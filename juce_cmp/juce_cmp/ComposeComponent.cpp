@@ -211,6 +211,10 @@ void ComposeComponent::mouseWheelMove(const juce::MouseEvent& event, const juce:
 
 bool ComposeComponent::keyPressed(const juce::KeyPress& key)
 {
+    // Let system shortcuts (Cmd+Q, Cmd+W, etc.) pass through to the host
+    if (key.getModifiers().isCommandDown())
+        return false;
+
     auto e = InputEventFactory::key(key.getKeyCode(), static_cast<uint32_t>(key.getTextCharacter()), true, getModifiers());
     provider_.sendInput(e);
     return true;
