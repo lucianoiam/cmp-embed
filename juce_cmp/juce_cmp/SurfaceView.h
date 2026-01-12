@@ -63,6 +63,9 @@ public:
     /** Set callback for resize requests from the view. */
     void setResizeCallback(ResizeCallback callback) { resizeCallback_ = callback; }
 
+    /** Get backing scale factor for a native view (e.g., 2.0 for Retina). */
+    static float getBackingScaleForView(void* nativeView);
+
 private:
     void* nativeView_ = nullptr;
     ResizeCallback resizeCallback_;

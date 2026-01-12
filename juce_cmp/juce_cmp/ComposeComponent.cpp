@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "ComposeComponent.h"
+#include "SurfaceView.h"
 #include <juce_core/juce_core.h>
-
-#if JUCE_MAC
-#import <AppKit/AppKit.h>
-#endif
 
 namespace juce_cmp
 {
@@ -95,15 +92,8 @@ void ComposeComponent::tryLaunch()
 
     // Get backing scale factor
     float scale = 1.0f;
-#if JUCE_MAC
-    if (auto* peer = getPeer()) {
-        if (NSView* peerView = (NSView*)peer->getNativeHandle()) {
-            if (NSWindow* window = peerView.window) {
-                scale = (float)window.backingScaleFactor;
-            }
-        }
-    }
-#endif
+    if (auto* peer = getPeer())
+        scale = SurfaceView::getBackingScaleForView(peer->getNativeHandle());
 
     // Find UI executable
     auto execFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);

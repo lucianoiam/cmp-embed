@@ -265,4 +265,19 @@ void SurfaceView::setFrame(int x, int y, int width, int height)
 #endif
 }
 
+float SurfaceView::getBackingScaleForView(void* nativeView)
+{
+#if __APPLE__
+    if (nativeView)
+    {
+        NSView* view = (__bridge NSView*)nativeView;
+        if (NSWindow* window = view.window)
+            return (float)window.backingScaleFactor;
+    }
+#else
+    (void)nativeView;
+#endif
+    return 1.0f;
+}
+
 }  // namespace juce_cmp
