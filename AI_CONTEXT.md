@@ -6,3 +6,5 @@
 - Do not add AI attribution to commit messages (no "Generated with Claude Code" or "Co-Authored-By: Claude" footers)
 - Keep commit messages concise - use bullet points for changes, avoid verbose explanations
 - Never push commits to git without explicit user confirmation
+- Remove debug log lines (fprintf, println, etc.) before committing
+- Avoid merge commits - use `git rebase` to integrate changes and keep a linear history
