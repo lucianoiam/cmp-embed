@@ -9,3 +9,4 @@
 - Remove debug log lines (fprintf, println, etc.) before committing
 - Avoid merge commits - use `git rebase` to integrate changes and keep a linear history
 - Check for dead code after architectural changes and remove it
+- Global/static state is strictly forbidden in JUCE plugin code (use instance members instead). This is because multiple plugin instances share the same process. CMP UI code runs in separate child processes, so globals are acceptable there.
