@@ -47,11 +47,12 @@ class Ipc(private val socketFD: Int) {
     private val writeBuffer = Memory(1024)
 
     private companion object {
-        const val EVENT_TYPE_INPUT = 0
-        const val EVENT_TYPE_CMP = 1
+        const val EVENT_TYPE_GFX = 0
+        const val EVENT_TYPE_INPUT = 1
         const val EVENT_TYPE_JUCE = 2
-        const val EVENT_TYPE_SURFACE_ID = 3
-        const val CMP_SUBTYPE_FIRST_FRAME = 0
+
+        const val GFX_EVENT_SURFACE_ID = 0
+        const val GFX_EVENT_FIRST_FRAME = 1
     }
 
     /** Returns true if the receiver is still running (socket not closed) */
@@ -84,9 +85,8 @@ class Ipc(private val socketFD: Int) {
 
                     when (eventType) {
                         EVENT_TYPE_INPUT -> handleInputEvent()
-                        EVENT_TYPE_CMP -> handleCmpEvent()
+                        EVENT_TYPE_GFX -> handleGfxEvent()
                         EVENT_TYPE_JUCE -> handleJuceEvent()
-                        EVENT_TYPE_SURFACE_ID -> handleSurfaceID()
                     }
                 } catch (e: Exception) {
                     // Silently ignore exceptions when running
@@ -145,23 +145,24 @@ class Ipc(private val socketFD: Int) {
         onInputEvent?.invoke(event)
     }
 
-    private fun handleCmpEvent() {
+    private fun handleGfxEvent() {
         val subtype = readByte()
         if (subtype < 0) {
             running = false
             kotlin.system.exitProcess(0)
         }
-        // CMP events are UI → Host only, shouldn't receive them here
-    }
 
-    private fun handleSurfaceID() {
-        val buffer = readFully(4) ?: run {
-            running = false
-            kotlin.system.exitProcess(0)
+        when (subtype) {
+            GFX_EVENT_SURFACE_ID -> {
+                val buffer = readFully(4) ?: run {
+                    running = false
+                    kotlin.system.exitProcess(0)
+                }
+                val surfaceID = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).int
+                onSurfaceID?.invoke(surfaceID)
+            }
+            // GFX_EVENT_FIRST_FRAME is UI → Host only, shouldn't receive here
         }
-
-        val surfaceID = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).int
-        onSurfaceID?.invoke(surfaceID)
     }
 
     private fun handleJuceEvent() {
@@ -215,11 +216,11 @@ class Ipc(private val socketFD: Int) {
 
     /**
      * Notify host that first frame has been rendered and surface is ready.
-     * Format: EVENT_TYPE_CMP + CMP_SUBTYPE_FIRST_FRAME
+     * Format: EVENT_TYPE_GFX + GFX_EVENT_FIRST_FRAME
      */
     fun sendFirstFrameRendered() {
         synchronized(writeLock) {
-            writeFully(byteArrayOf(EVENT_TYPE_CMP.toByte(), CMP_SUBTYPE_FIRST_FRAME.toByte()))
+            writeFully(byteArrayOf(EVENT_TYPE_GFX.toByte(), GFX_EVENT_FIRST_FRAME.toByte()))
         }
     }
 }

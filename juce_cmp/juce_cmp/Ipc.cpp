@@ -107,9 +107,9 @@ void Ipc::sendSurfaceID(uint32_t surfaceID)
     if (socketFD < 0) return;
 
 #if JUCE_MAC || JUCE_LINUX
-    uint8_t prefix = EVENT_TYPE_SURFACE_ID;
-    ssize_t written = write(socketFD, &prefix, 1);
-    if (written != 1)
+    uint8_t header[2] = { EVENT_TYPE_GFX, GFX_EVENT_SURFACE_ID };
+    ssize_t written = write(socketFD, header, 2);
+    if (written != 2)
     {
         socketFD = -1;
         return;
@@ -135,8 +135,8 @@ void Ipc::readerLoop()
 
         switch (eventType)
         {
-            case EVENT_TYPE_CMP:
-                handleCmpEvent();
+            case EVENT_TYPE_GFX:
+                handleGfxEvent();
                 break;
             case EVENT_TYPE_JUCE:
                 handleJuceEvent();
@@ -147,13 +147,13 @@ void Ipc::readerLoop()
     }
 }
 
-void Ipc::handleCmpEvent()
+void Ipc::handleGfxEvent()
 {
     uint8_t subtype = 0;
     if (readFully(&subtype, 1) != 1)
         return;
 
-    if (subtype == CMP_SUBTYPE_FIRST_FRAME && onFirstFrame)
+    if (subtype == GFX_EVENT_FIRST_FRAME && onFirstFrame)
     {
         juce::MessageManager::callAsync([this]() {
             if (onFirstFrame)

@@ -53,7 +53,7 @@ private:
 
     // RX thread methods
     void readerLoop();
-    void handleCmpEvent();
+    void handleGfxEvent();
     void handleJuceEvent();
     ssize_t readFully(void* buffer, size_t size);
 

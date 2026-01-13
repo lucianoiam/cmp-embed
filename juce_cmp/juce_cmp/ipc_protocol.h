@@ -19,15 +19,15 @@ extern "C" {
 /*
  * Event types (first byte of every message)
  */
-#define EVENT_TYPE_INPUT            0
-#define EVENT_TYPE_CMP              1
+#define EVENT_TYPE_GFX              0
+#define EVENT_TYPE_INPUT            1
 #define EVENT_TYPE_JUCE             2
-#define EVENT_TYPE_SURFACE_ID       3  /* 4-byte IOSurface ID follows */
 
 /*
- * CMP event subtypes (second byte for EVENT_TYPE_CMP)
+ * GFX event types (second byte for EVENT_TYPE_GFX)
  */
-#define CMP_SUBTYPE_FIRST_FRAME     0
+#define GFX_EVENT_SURFACE_ID        0  /* Host→UI: 4-byte surface ID follows */
+#define GFX_EVENT_FIRST_FRAME       1  /* UI→Host: surface ready to display */
 
 /*
  * Input event types (InputEvent.type field, NOT the 1-byte prefix)
@@ -79,7 +79,7 @@ extern "C" {
  *
  *   RESIZE: x, y = new size (pixels)
  *           data1 = scale factor * 100 (e.g., 200 = 2.0x)
- *           (surface ID sent separately via EVENT_TYPE_SURFACE_ID)
+ *           (surface ID sent separately via GFX_EVENT_SURFACE_ID)
  */
 #pragma pack(push, 1)
 typedef struct {
@@ -103,8 +103,9 @@ _Static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
 #endif
 
 /**
- * CMP event payload - 1 byte subtype, follows EVENT_TYPE_CMP prefix.
- *   CMP_SUBTYPE_FIRST_FRAME: Surface ready to display (no additional data)
+ * GFX event payload - 1 byte subtype, follows EVENT_TYPE_GFX prefix.
+ *   GFX_EVENT_FIRST_FRAME: Surface ready to display (no additional data)
+ *   GFX_EVENT_SURFACE_ID: 4-byte surface ID (little-endian)
  */
 
 /**
