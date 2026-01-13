@@ -5,6 +5,9 @@
 
 #if JUCE_MAC || JUCE_LINUX
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <poll.h>
 #endif
 
 namespace juce_cmp
@@ -20,6 +23,15 @@ Ipc::~Ipc()
 void Ipc::setSocketFD(int fd)
 {
     socketFD = fd;
+#if JUCE_MAC || JUCE_LINUX
+    // Set non-blocking mode to prevent UI thread stalls
+    if (fd >= 0)
+    {
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0)
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+#endif
 }
 
 void Ipc::startReceiving()
@@ -57,16 +69,9 @@ void Ipc::sendInput(InputEvent& event)
 
 #if JUCE_MAC || JUCE_LINUX
     uint8_t prefix = EVENT_TYPE_INPUT;
-    ssize_t written = write(socketFD, &prefix, 1);
-    if (written != 1)
-    {
-        socketFD = -1;
+    if (!writeNonBlocking(&prefix, 1))
         return;
-    }
-
-    written = write(socketFD, &event, sizeof(InputEvent));
-    if (written != sizeof(InputEvent))
-        socketFD = -1;
+    writeNonBlocking(&event, sizeof(InputEvent));
 #endif
 }
 
@@ -82,23 +87,11 @@ void Ipc::sendEvent(const juce::ValueTree& tree)
 
 #if JUCE_MAC || JUCE_LINUX
     uint8_t prefix = EVENT_TYPE_JUCE;
-    ssize_t written = write(socketFD, &prefix, 1);
-    if (written != 1)
-    {
-        socketFD = -1;
+    if (!writeNonBlocking(&prefix, 1))
         return;
-    }
-
-    written = write(socketFD, &dataSize, 4);
-    if (written != 4)
-    {
-        socketFD = -1;
+    if (!writeNonBlocking(&dataSize, 4))
         return;
-    }
-
-    written = write(socketFD, data, dataSize);
-    if (written != static_cast<ssize_t>(dataSize))
-        socketFD = -1;
+    writeNonBlocking(data, dataSize);
 #endif
 }
 
@@ -171,13 +164,68 @@ ssize_t Ipc::readFully(void* buffer, size_t size)
     size_t totalRead = 0;
     auto* ptr = static_cast<uint8_t*>(buffer);
 
+#if JUCE_MAC || JUCE_LINUX
     while (totalRead < size && running.load())
     {
+        // Wait for data with timeout (allows checking running flag)
+        struct pollfd pfd = { socketFD, POLLIN, 0 };
+        int ready = poll(&pfd, 1, 100);  // 100ms timeout
+
+        if (ready < 0)
+            return -1;  // Error
+        if (ready == 0)
+            continue;   // Timeout, check running flag
+
         ssize_t n = ::read(socketFD, ptr + totalRead, size - totalRead);
-        if (n <= 0) return totalRead > 0 ? static_cast<ssize_t>(totalRead) : n;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            continue;
+        if (n <= 0)
+            return totalRead > 0 ? static_cast<ssize_t>(totalRead) : n;
         totalRead += static_cast<size_t>(n);
     }
+#endif
     return static_cast<ssize_t>(totalRead);
+}
+
+bool Ipc::writeNonBlocking(const void* data, size_t size)
+{
+#if JUCE_MAC || JUCE_LINUX
+    size_t totalWritten = 0;
+    auto* ptr = static_cast<const uint8_t*>(data);
+
+    // Try a few times with small delays for EAGAIN
+    for (int attempts = 0; attempts < 3 && totalWritten < size; ++attempts)
+    {
+        ssize_t n = ::write(socketFD, ptr + totalWritten, size - totalWritten);
+        if (n > 0)
+        {
+            totalWritten += static_cast<size_t>(n);
+            attempts = 0;  // Reset on progress
+        }
+        else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        {
+            // Socket buffer full - yield briefly and retry
+            continue;
+        }
+        else
+        {
+            // Real error
+            socketFD = -1;
+            return false;
+        }
+    }
+
+    if (totalWritten != size)
+    {
+        socketFD = -1;
+        return false;
+    }
+    return true;
+#else
+    (void)data;
+    (void)size;
+    return false;
+#endif
 }
 
 }  // namespace juce_cmp

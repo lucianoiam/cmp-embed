@@ -106,11 +106,11 @@ bool MachPort::sendPort(uint32_t machPort)
 
     kern_return_t kr = mach_msg(
         &msg.header,
-        MACH_SEND_MSG,
+        MACH_SEND_MSG | MACH_SEND_TIMEOUT,
         sizeof(msg),
         0,
         MACH_PORT_NULL,
-        MACH_MSG_TIMEOUT_NONE,
+        100,  // 100ms timeout
         MACH_PORT_NULL
     );
 

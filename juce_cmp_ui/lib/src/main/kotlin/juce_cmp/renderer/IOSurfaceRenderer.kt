@@ -21,6 +21,8 @@ import juce_cmp.input.InputEvent
 import juce_cmp.input.InputType
 import org.jetbrains.skia.*
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -205,6 +207,9 @@ private fun runIOSurfaceRendererImpl(
         // Pending IOSurface from Mach channel
         val pendingIOSurface = AtomicReference<Pointer?>(null)
 
+        // Latch for initial surface arrival
+        val initialSurfaceLatch = CountDownLatch(1)
+
         // Event queue for input events
         val eventQueue = ConcurrentLinkedQueue<InputEvent>()
 
@@ -227,6 +232,7 @@ private fun runIOSurfaceRendererImpl(
                 val surface = NativeLib.INSTANCE.machChannelReceiveSurface(machChannel)
                 if (surface != null) {
                     pendingIOSurface.set(surface)
+                    initialSurfaceLatch.countDown()
                     needsRedraw.set(true)
                 } else {
                     break  // Channel closed
@@ -238,14 +244,11 @@ private fun runIOSurfaceRendererImpl(
             start()
         }
 
-        // Wait for initial IOSurface from Mach channel
-        var initialSurface: Pointer? = null
-        while (initialSurface == null && ipc.isRunning) {
-            initialSurface = pendingIOSurface.getAndSet(null)
-            if (initialSurface == null) {
-                Thread.sleep(10)
-            }
+        // Wait for initial IOSurface from Mach channel (non-blocking wait with timeout)
+        if (!initialSurfaceLatch.await(5, TimeUnit.SECONDS)) {
+            error("Timeout waiting for initial IOSurface")
         }
+        val initialSurface = pendingIOSurface.getAndSet(null)
 
         if (initialSurface == null) {
             error("Failed to receive initial IOSurface")

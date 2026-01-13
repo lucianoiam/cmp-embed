@@ -62,7 +62,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 
 **Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over a Unix socket. The UI deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** Host↔UI uses a bidirectional Unix socket for input events and ValueTree messages. The library has no knowledge of parameters—apps interpret ValueTree content.
+**Bidirectional IPC:** Host↔UI uses a single multiplexed Unix socket for all communication: input events, resize notifications, and ValueTree messages. The first byte of each message indicates the event type (input/cmp/juce). The library has no knowledge of parameters—apps interpret ValueTree content.
 
 ## Project Structure
 

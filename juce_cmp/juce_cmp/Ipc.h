@@ -59,6 +59,9 @@ private:
     void handleJuceEvent();
     ssize_t readFully(void* buffer, size_t size);
 
+    // TX helper (non-blocking with retry)
+    bool writeNonBlocking(const void* data, size_t size);
+
     // Socket file descriptor (bidirectional)
     int socketFD = -1;
 

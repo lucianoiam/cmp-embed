@@ -110,29 +110,32 @@ void ChildProcess::stop()
         socketFD_ = -1;
     }
 
-    // Wait for child to exit with timeout, then force kill
     if (childPid_ > 0)
     {
         int status;
-        // Give child 200ms to exit gracefully
-        for (int i = 0; i < 20; ++i)
+
+        // Check if already exited (non-blocking)
+        pid_t result = waitpid(childPid_, &status, WNOHANG);
+        if (result != 0)
         {
-            pid_t result = waitpid(childPid_, &status, WNOHANG);
-            if (result != 0)
-            {
-                childPid_ = 0;
-                break;
-            }
-            usleep(10000);  // 10ms
+            childPid_ = 0;
+            return;
         }
 
-        // If still alive, force kill
-        if (childPid_ > 0)
+        // Send SIGTERM and check once more (non-blocking)
+        kill(childPid_, SIGTERM);
+        result = waitpid(childPid_, &status, WNOHANG);
+        if (result != 0)
         {
-            kill(childPid_, SIGKILL);
-            waitpid(childPid_, &status, 0);
             childPid_ = 0;
+            return;
         }
+
+        // Force kill - child will become zombie until reaped
+        kill(childPid_, SIGKILL);
+        // Non-blocking reap - zombie is harmless, OS cleans up on parent exit
+        waitpid(childPid_, &status, WNOHANG);
+        childPid_ = 0;
     }
 #endif
 }
