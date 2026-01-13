@@ -45,8 +45,8 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 │  - Transparent JUCE component captures input events     │
 │  - Launches Compose UI as child process                 │
 └─────────────────┬───────────────────────────────────────┘
-                  │ IOSurface ID (arg)    Input events (stdin)
-                  │ UI messages (FIFO) ◄──┘
+                  │ Mach port IPC (IOSurface)
+                  │ Socket (input events, messages)
                   ▼
 ┌─────────────────────────────────────────────────────────┐
 │  UI (Compose Desktop / Skia / Metal)                    │
@@ -58,11 +58,11 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Rendering:** The plugin creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
+**Rendering:** The plugin creates an IOSurface and shares it with the child via Mach port IPC. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
 
-**Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
+**Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over a Unix socket. The UI deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** Host→UI uses events of type JUCE carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
+**Bidirectional IPC:** Host↔UI uses a bidirectional Unix socket for input events and ValueTree messages. The library has no knowledge of parameters—apps interpret ValueTree content.
 
 ## Project Structure
 
@@ -79,6 +79,7 @@ juce_cmp/                     # JUCE module (include in your plugin)
     ChildProcess.h/cpp        # Child process lifecycle (fork/exec)
     Surface.h/mm              # Shared GPU surface (IOSurface on macOS)
     SurfaceView.h/mm          # Native view for display (NSView/CALayer on macOS)
+    MachPort.h/mm             # Mach port IPC for IOSurface sharing (macOS)
     Ipc.h/cpp                 # Bidirectional IPC (ValueTree messages)
     InputEvent.h              # Factory functions for input events
     ipc_protocol.h            # IPC protocol - binary events (16 bytes)
@@ -222,12 +223,13 @@ To validate: `auval -v aumu JCMs JCMm`
 ## Command-Line Flags
 
 The UI app supports these flags when launched by the plugin:
-- `--iosurface-id=<id>` - IOSurface ID to render to (implies embedded mode)
+- `--mach-service=<name>` - Mach service name for IOSurface sharing (implies embedded mode)
+- `--socket-fd=<fd>` - Unix socket file descriptor for IPC
 - `--scale=<factor>` - Backing scale factor (e.g., 2.0 for Retina)
 
 ## IPC Protocol
 
-Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_protocol.h`):
+Events are 16-byte binary structs sent over the Unix socket (see `juce_cmp/juce_cmp/ipc_protocol.h`):
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
@@ -243,11 +245,11 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 
 ## Bidirectional ValueTree Protocol
 
-**UI→Host (stdout):**
+**UI→Host (socket):**
 - `size` (uint32_t, little-endian) - ValueTree data size in bytes
 - `data` (N bytes) - ValueTree binary serialization (JUCE-compatible)
 
-**Host→UI (stdin event of type JUCE):**
+**Host→UI (socket event of type JUCE):**
 - 1-byte type prefix (`EVENT_TYPE_JUCE=2`)
 - 4-byte size (little-endian) + ValueTree binary data
 
@@ -265,10 +267,6 @@ if (tree.type == "param") {
     val value = tree["value"].toDouble().toFloat()
 }
 ```
-
-The UI captures the raw stdout file descriptor before any JVM/library code runs,
-then redirects System.out to stderr. This prevents library noise from corrupting
-the binary protocol.
 
 ## Platform Support
 

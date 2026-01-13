@@ -16,11 +16,10 @@ RENDERING
 ARCHITECTURE
 ------------
 [x] Bidirectional IPC - UI sends messages back (setParameter working)
-[x] IPC uses stdout pipe with JuceValueTree binary format
-    - UI captures raw stdout fd before JVM libraries can pollute it
-    - System.out redirected to stderr for library noise
+[x] IPC uses Unix socketpair with JuceValueTree binary format
+    - Bidirectional socket replaces stdin/stdout pipes
     - ValueTree provides extensible key-value messages
-[ ] Shared memory ring buffer instead of pipe for lower latency
+[ ] Shared memory ring buffer for lower latency (not needed for current use case)
 [ ] Extract embedding as a library/framework others can use
 
 PLATFORM EXPANSION
@@ -34,15 +33,15 @@ DEVELOPER EXPERIENCE
 [ ] Hot reload in embedded mode (currently only standalone Compose UI has it)
 [ ] Debug overlay showing frame times
 [ ] Example with more complex UI (lists, text fields, navigation)
-[ ] Mechanism for easily creating startup UI snapshots
+[x] Mechanism for easily creating startup UI snapshots
+    - SurfaceFrameCapture.kt provides captureFrameToPNG() and captureFirstFrame()
 
 PRODUCTION READINESS
 --------------------
 [ ] Error recovery if child crashes
 [ ] Graceful shutdown handshake
 [ ] Security sandbox considerations
-[ ] Replace kIOSurfaceIsGlobal with Mach ports for cross-process IOSurface sharing
-    - kIOSurfaceIsGlobal deprecated since macOS 10.11 (security hole - any process can lookup by ID)
-    - Modern approach: IOSurfaceCreateMachPort() + IOSurfaceLookupFromMachPort()
-    - Requires passing mach port via IPC instead of integer ID on command line
-    - Syphon framework has same issue, still using deprecated API
+[x] Replace kIOSurfaceIsGlobal with Mach ports for cross-process IOSurface sharing
+    - Uses IOSurfaceCreateMachPort() + IOSurfaceLookupFromMachPort()
+    - Bidirectional Mach channel: parent registers service, child connects, exchanges ports
+    - Parent pushes IOSurface Mach ports for initial surface and resizes

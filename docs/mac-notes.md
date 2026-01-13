@@ -28,7 +28,7 @@ IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
 ```
 
 **Key components:**
-- `MachPortIPC` class (C++): Handles bootstrap registration and port sending
+- `MachPort` class (C++): Handles bootstrap registration and port sending
 - `machChannelConnect()` / `machChannelReceiveSurface()` (Obj-C): Client-side channel
 
 **Flow:**
