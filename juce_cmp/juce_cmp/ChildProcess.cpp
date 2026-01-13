@@ -3,12 +3,17 @@
 
 #include "ChildProcess.h"
 
+#include <vector>
+
 #if __APPLE__ || __linux__
 #include <unistd.h>
 #include <signal.h>
+#include <spawn.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+
+extern char** environ;
 #endif
 
 namespace juce_cmp
@@ -42,55 +47,45 @@ bool ChildProcess::launch(const std::string& executable,
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0)
         return false;
 
-    childPid_ = fork();
+    // Build argument list
+    std::string socketArg = "--socket-fd=" + std::to_string(sockets[1]);
 
-    if (childPid_ == 0)
+    std::vector<char*> argv;
+    argv.push_back(const_cast<char*>(executable.c_str()));
+    argv.push_back(const_cast<char*>(socketArg.c_str()));
+    argv.push_back(const_cast<char*>(scaleArg.c_str()));
+    if (!machServiceArg.empty())
+        argv.push_back(const_cast<char*>(machServiceArg.c_str()));
+    argv.push_back(nullptr);
+
+    // Set up file actions to close parent's socket end in child
+    posix_spawn_file_actions_t fileActions;
+    posix_spawn_file_actions_init(&fileActions);
+    posix_spawn_file_actions_addclose(&fileActions, sockets[0]);
+
+    // Set working directory (macOS 10.15+, glibc 2.29+)
+    if (!workingDir.empty())
+        posix_spawn_file_actions_addchdir_np(&fileActions, workingDir.c_str());
+
+    // Spawn the child process
+    pid_t pid;
+    int result = posix_spawn(&pid, executable.c_str(), &fileActions, nullptr, argv.data(), environ);
+
+    posix_spawn_file_actions_destroy(&fileActions);
+
+    if (result != 0)
     {
-        // Child process
-        close(sockets[0]);  // Close parent's end
-
-        // Pass socket FD as argument
-        std::string socketArg = "--socket-fd=" + std::to_string(sockets[1]);
-
-        if (!workingDir.empty())
-            chdir(workingDir.c_str());
-
-        if (!machServiceArg.empty())
-        {
-            execl(executable.c_str(),
-                  executable.c_str(),
-                  socketArg.c_str(),
-                  scaleArg.c_str(),
-                  machServiceArg.c_str(),
-                  nullptr);
-        }
-        else
-        {
-            execl(executable.c_str(),
-                  executable.c_str(),
-                  socketArg.c_str(),
-                  scaleArg.c_str(),
-                  nullptr);
-        }
-
-        // If exec fails, exit child
-        _exit(1);
-    }
-    else if (childPid_ > 0)
-    {
-        // Parent process
-        close(sockets[1]);  // Close child's end
-        socketFD_ = sockets[0];
-
-        return true;
-    }
-    else
-    {
-        // Fork failed
         close(sockets[0]);
         close(sockets[1]);
         return false;
     }
+
+    // Parent: close child's socket end, keep ours
+    close(sockets[1]);
+    socketFD_ = sockets[0];
+    childPid_ = pid;
+
+    return true;
 #else
     (void)executable;
     (void)scale;

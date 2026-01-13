@@ -70,7 +70,7 @@ void ComposeComponent::paint(juce::Graphics& g)
         }
 
         g.drawImage(loadingPreview_,
-                    drawX, drawY, drawWidth, drawHeight,
+                    (int)drawX, (int)drawY, (int)drawWidth, (int)drawHeight,
                     0, 0, loadingPreview_.getWidth(), loadingPreview_.getHeight());
     }
 }

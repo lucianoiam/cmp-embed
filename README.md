@@ -76,7 +76,7 @@ juce_cmp/                     # JUCE module (include in your plugin)
   juce_cmp/                   # Implementation files
     ComposeComponent.h/cpp    # JUCE Component displaying Compose UI (pure C++)
     ComposeProvider.h/cpp     # Orchestrates embedding (pure C++)
-    ChildProcess.h/cpp        # Child process lifecycle (fork/exec)
+    ChildProcess.h/cpp        # Child process lifecycle (posix_spawn)
     Surface.h/mm              # Shared GPU surface (IOSurface on macOS)
     SurfaceView.h/mm          # Native view for display (NSView/CALayer on macOS)
     MachPort.h/mm             # Mach port IPC for IOSurface sharing (macOS)
