@@ -119,6 +119,38 @@ IOSurfaceRef surface = IOSurfaceLookup(surfaceID);
 
 This approach worked but used a deprecated API. The Mach IPC solution avoids this.
 
+## Resize Flow
+
+Resize is synchronized to avoid jitter from displaying old surface in new frame size.
+
+**Host side (C++):**
+1. `ComposeComponent::resized()` calls `provider_.resize(width, height, viewX, viewY)`
+2. `ComposeProvider::resize()`:
+   - Creates new IOSurface at new size
+   - Stores pending view bounds (does NOT apply them yet)
+   - Sends resize event to child via socket
+   - Sends new IOSurface via Mach port
+3. When `SURFACE_READY` received from child:
+   - Applies pending view bounds (`view_.setFrame()`)
+   - Sets pending surface for swap (`view_.setPendingSurface()`)
+4. `displayLinkFired` (every vsync):
+   - If pending surface exists, swaps it in
+   - Always calls `setNeedsDisplay` to refresh IOSurface content
+
+**Child side (Kotlin):**
+1. Receives new IOSurface via Mach port (blocking receive thread)
+2. Receives resize event via socket
+3. Render loop detects `newSurface != null`:
+   - Swaps in new surface resources
+   - Updates scene size
+   - Sets `surfaceChanged = true`
+4. After render: if `surfaceChanged`, sends `SURFACE_READY` via socket
+
+**Key points:**
+- View bounds and surface swap happen atomically when SURFACE_READY arrives
+- Old surface stays displayed at old size until new one is ready
+- IOSurface content refreshes every vsync (child renders continuously)
+
 ## IPC Channel
 
 Uses `socketpair(AF_UNIX, SOCK_STREAM, 0, sockets)` for bidirectional communication:

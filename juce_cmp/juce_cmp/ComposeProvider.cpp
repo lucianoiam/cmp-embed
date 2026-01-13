@@ -63,6 +63,13 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     });
 
     ipc_.setFrameReadyHandler([this]() {
+        // Apply pending view bounds first, then swap surface atomically
+        if (hasPendingBounds_)
+        {
+            view_.setFrame(pendingViewX_, pendingViewY_, pendingViewW_, pendingViewH_);
+            hasPendingBounds_ = false;
+        }
+
         // Swap to latest surface now that child has rendered to it
         view_.setPendingSurface(surface_.getNativeHandle());
 
@@ -125,7 +132,7 @@ void ComposeProvider::updateViewBounds(int x, int y, int width, int height)
     view_.setFrame(x, y, width, height);
 }
 
-void ComposeProvider::resize(int width, int height)
+void ComposeProvider::resize(int width, int height, int viewX, int viewY)
 {
     if (width <= 0 || height <= 0)
         return;
@@ -135,13 +142,20 @@ void ComposeProvider::resize(int width, int height)
 
     if (surface_.resize(pixelW, pixelH))
     {
+        // Store pending view bounds - will be applied when surface is ready
+        pendingViewX_ = viewX;
+        pendingViewY_ = viewY;
+        pendingViewW_ = width;
+        pendingViewH_ = height;
+        hasPendingBounds_ = true;
+
         // Send resize event (dimensions, no surface ID)
         auto e = InputEventFactory::resize(pixelW, pixelH, scale_);
         ipc_.sendInput(e);
 
 #if __APPLE__
         // Send new surface via Mach port channel
-        // Child will send FRAME_READY after rendering, then we swap surfaces
+        // Child will send SURFACE_READY after rendering, then we swap surfaces
         sendSurfacePort();
 #endif
     }

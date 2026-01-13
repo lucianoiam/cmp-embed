@@ -39,6 +39,7 @@
     if (self) {
         self.wantsLayer = YES;
         self.backingScale = 1.0;
+        // Anchor content to top-left corner during resize transitions
         self.layer.contentsGravity = kCAGravityTopLeft;
 
         _displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
@@ -114,6 +115,7 @@
         self.surface = self.pendingSurface;
         self.pendingSurface = nil;
     }
+    // Always refresh to show latest IOSurface content (child renders continuously)
     [self.layer setNeedsDisplay];
 }
 
