@@ -37,12 +37,13 @@ import java.util.concurrent.atomic.AtomicReference
 fun runIOSurfaceRenderer(
     socketFD: Int,
     scaleFactor: Float = 1f,
+    machServiceName: String? = null,
     ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
     onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    runIOSurfaceRendererImpl(socketFD, scaleFactor, ipc, onFrameRendered, onJuceEvent, content)
+    runIOSurfaceRendererImpl(socketFD, scaleFactor, machServiceName, ipc, onFrameRendered, onJuceEvent, content)
 }
 
 /**
@@ -56,6 +57,7 @@ private interface NativeLib : Library {
     fun getMetalDevice(context: Pointer): Pointer?
     fun getMetalQueue(context: Pointer): Pointer?
     fun createIOSurfaceTexture(context: Pointer, surfaceID: Int, outWidth: IntByReference?, outHeight: IntByReference?): Pointer?
+    fun createIOSurfaceTextureFromMachService(context: Pointer, serviceName: String, outWidth: IntByReference?, outHeight: IntByReference?): Pointer?
     fun releaseIOSurfaceTexture(texturePtr: Pointer)
     fun flushAndSync(context: Pointer)
 
@@ -101,9 +103,38 @@ private fun createRenderResources(
         metalContext, surfaceID, widthRef, heightRef
     ) ?: error("Failed to create IOSurface-backed texture for ID $surfaceID")
 
-    val width = widthRef.value
-    val height = heightRef.value
+    return createRenderResourcesFromTexture(metalContext, devicePtr, queuePtr, texturePtr, widthRef.value, heightRef.value)
+}
 
+/**
+ * Creates RenderResources from a Mach service name.
+ */
+private fun createRenderResourcesFromMachService(
+    metalContext: Pointer,
+    devicePtr: Pointer,
+    queuePtr: Pointer,
+    machServiceName: String
+): RenderResources {
+    val widthRef = IntByReference()
+    val heightRef = IntByReference()
+    val texturePtr = NativeLib.INSTANCE.createIOSurfaceTextureFromMachService(
+        metalContext, machServiceName, widthRef, heightRef
+    ) ?: error("Failed to create IOSurface-backed texture from Mach service '$machServiceName'")
+
+    return createRenderResourcesFromTexture(metalContext, devicePtr, queuePtr, texturePtr, widthRef.value, heightRef.value)
+}
+
+/**
+ * Creates RenderResources from an already-created texture pointer.
+ */
+private fun createRenderResourcesFromTexture(
+    metalContext: Pointer,
+    devicePtr: Pointer,
+    queuePtr: Pointer,
+    texturePtr: Pointer,
+    width: Int,
+    height: Int
+): RenderResources {
     // Create Skia DirectContext using our Metal device/queue
     val directContext = DirectContext.makeMetal(
         Pointer.nativeValue(devicePtr),
@@ -149,6 +180,7 @@ private fun createRenderResources(
 private fun runIOSurfaceRendererImpl(
     socketFD: Int,
     scaleFactor: Float = 1f,
+    machServiceName: String?,
     ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
     onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
@@ -196,21 +228,26 @@ private fun runIOSurfaceRendererImpl(
             onJuceEvent = onJuceEvent
         )
 
-        // Wait for initial surface ID from host
-        var initialSurfaceID: Int? = null
-        while (initialSurfaceID == null && ipc.isRunning) {
-            initialSurfaceID = pendingSurfaceID.getAndSet(null)
-            if (initialSurfaceID == null) {
-                Thread.sleep(10)
+        // Initial render resources - use Mach service if available, otherwise wait for surface ID
+        var resources = if (machServiceName != null) {
+            // Use Mach IPC to get initial IOSurface (no kIOSurfaceIsGlobal needed)
+            createRenderResourcesFromMachService(metalContext, devicePtr, queuePtr, machServiceName)
+        } else {
+            // Fall back to surface ID via socket (requires kIOSurfaceIsGlobal)
+            var initialSurfaceID: Int? = null
+            while (initialSurfaceID == null && ipc.isRunning) {
+                initialSurfaceID = pendingSurfaceID.getAndSet(null)
+                if (initialSurfaceID == null) {
+                    Thread.sleep(10)
+                }
             }
-        }
 
-        if (initialSurfaceID == null) {
-            error("Failed to receive initial surface ID")
-        }
+            if (initialSurfaceID == null) {
+                error("Failed to receive initial surface ID")
+            }
 
-        // Initial render resources
-        var resources = createRenderResources(metalContext, devicePtr, queuePtr, initialSurfaceID)
+            createRenderResources(metalContext, devicePtr, queuePtr, initialSurfaceID)
+        }
 
         // Track current scale factor (may change on resize if window moves to different display)
         var currentScale = scaleFactor

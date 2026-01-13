@@ -7,6 +7,10 @@
 #include <unistd.h>
 #endif
 
+#if __APPLE__
+#include <mach/mach.h>
+#endif
+
 namespace juce_cmp
 {
 
@@ -28,10 +32,25 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     if (!surface_.create(pixelW, pixelH))
         return false;
 
-    // Launch child process (no surface ID - we'll send FD via socket)
-    if (!child_.launch(executable, scale))
+#if __APPLE__
+    // Set up Mach IPC for initial surface sharing (no deprecated kIOSurfaceIsGlobal needed)
+    std::string machService = machPortIPC_.createServer();
+    if (machService.empty())
+    {
+        // Fall back to socket-based surface ID (requires kIOSurfaceIsGlobal)
+        machService = "";
+    }
+#else
+    std::string machService;
+#endif
+
+    // Launch child process
+    if (!child_.launch(executable, scale, machService))
     {
         surface_.release();
+#if __APPLE__
+        machPortIPC_.destroyServer();
+#endif
         return false;
     }
 
@@ -50,8 +69,26 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
 
     ipc_.startReceiving();
 
-    // Send surface ID to child
-    ipc_.sendSurfaceID(surface_.getID());
+#if __APPLE__
+    if (!machService.empty())
+    {
+        // Send IOSurface Mach port to child in a separate thread (blocking call)
+        uint32_t surfacePort = surface_.createMachPort();
+        if (surfacePort != 0)
+        {
+            machPortThread_ = std::thread([this, surfacePort]() {
+                machPortIPC_.sendPort(surfacePort);
+                // Deallocate our copy of the port after sending
+                mach_port_deallocate(mach_task_self(), (mach_port_t)surfacePort);
+            });
+        }
+    }
+    else
+#endif
+    {
+        // Fall back: Send surface ID via socket (requires kIOSurfaceIsGlobal)
+        ipc_.sendSurfaceID(surface_.getID());
+    }
 
     // Set up view
     view_.create();
@@ -63,6 +100,11 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
 
 void ComposeProvider::stop()
 {
+#if __APPLE__
+    machPortIPC_.destroyServer();
+    if (machPortThread_.joinable())
+        machPortThread_.join();
+#endif
     child_.stop();
     ipc_.stop();
     view_.destroy();

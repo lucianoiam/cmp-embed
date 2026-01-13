@@ -21,6 +21,7 @@ object Library {
     private var initialized = false
     private var socketFD: Int? = null
     private var scaleFactor: Float = 1f
+    private var machServiceName: String? = null
     private var ipc: Ipc? = null
 
     /**
@@ -71,6 +72,11 @@ object Library {
                 ?.toFloatOrNull()
                 ?: 1f
 
+            // Parse --mach-service=<name> for Mach port IPC (macOS)
+            machServiceName = args
+                .firstOrNull { it.startsWith("--mach-service=") }
+                ?.substringAfter("=")
+
             // Create IPC channel on the inherited socket FD
             ipc = Ipc(socketFD!!)
 
@@ -100,6 +106,7 @@ object Library {
         runIOSurfaceRenderer(
             socketFD = fd,
             scaleFactor = scaleFactor,
+            machServiceName = machServiceName,
             ipc = channel,
             onFrameRendered = onFrameRendered,
             onJuceEvent = onEvent,

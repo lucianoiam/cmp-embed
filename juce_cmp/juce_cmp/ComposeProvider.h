@@ -7,11 +7,13 @@
 #include "Surface.h"
 #include "SurfaceView.h"
 #include "Ipc.h"
+#include "MachPortIPC.h"
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include <cstdint>
 #include <string>
 #include <functional>
+#include <thread>
 
 namespace juce_cmp
 {
@@ -60,6 +62,10 @@ private:
     SurfaceView view_;
     ChildProcess child_;
     Ipc ipc_;
+#if __APPLE__
+    MachPortIPC machPortIPC_;
+    std::thread machPortThread_;
+#endif
 
     float scale_ = 1.0f;
     EventCallback eventCallback_;

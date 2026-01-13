@@ -29,49 +29,72 @@ IOSurfaceRef surface = IOSurfaceLookup(surfaceID);
 
 **Note**: `kIOSurfaceIsGlobal` is deprecated but still functional. The deprecation warning is suppressed with `#pragma clang diagnostic ignored "-Wdeprecated-declarations"`.
 
-### Failed Mach Port Approach
+### Failed Alternatives
 
-Attempted to eliminate the deprecated flag by passing IOSurface Mach ports via `SCM_RIGHTS`:
+Several approaches were investigated to eliminate the deprecated `kIOSurfaceIsGlobal` flag:
 
-1. **Goal**: Use `IOSurfaceCreateMachPort()` to get a Mach port, convert to FD, pass via `SCM_RIGHTS`, convert back to Mach port, use `IOSurfaceLookupFromMachPort()`.
+#### 1. SCM_RIGHTS with fileport (Failed)
 
-2. **Implementation**:
-   ```cpp
-   // Host side
-   mach_port_t machPort = IOSurfaceCreateMachPort(surface);
-   int fd = fileport_makefd(machPort);  // Private API
-   // Send fd via SCM_RIGHTS using sendmsg()
+**Goal**: Convert Mach port to FD, pass via `SCM_RIGHTS`, convert back.
 
-   // Child side
-   // Receive fd via recvmsg()
-   mach_port_t machPort = fileport_makeport(fd);  // Private API
-   IOSurfaceRef surface = IOSurfaceLookupFromMachPort(machPort);
-   ```
+```cpp
+// Host side
+mach_port_t machPort = IOSurfaceCreateMachPort(surface);
+int fd = fileport_makefd(machPort);  // Private API
+// Send fd via SCM_RIGHTS using sendmsg()
 
-3. **Result**: `fileport_makefd()` returned `-1` despite valid Mach port.
+// Child side
+mach_port_t machPort = fileport_makeport(fd);  // Private API
+IOSurfaceRef surface = IOSurfaceLookupFromMachPort(machPort);
+```
 
-4. **Root cause**: `fileport_makefd/makeport` are designed for wrapping Unix file descriptors as Mach ports (for XPC), not the other way around. SCM_RIGHTS can only pass Unix file descriptors, not Mach ports directly.
+**Result**: `fileport_makefd()` returned `-1`.
 
-### Proper Alternatives (Future Work)
+**Root cause**: `fileport_makefd/makeport` wrap Unix FDs as Mach ports (for XPC), not vice versa. SCM_RIGHTS only passes Unix file descriptors.
 
-To properly share IOSurfaces without the deprecated global flag:
+#### 2. task_set_special_port / task_get_special_port (Failed)
 
-1. **XPC** (Recommended by Apple)
-   - Use `IOSurfaceCreateXPCObject()` to wrap surface
-   - Requires XPC service with launchd plist
-   - Significant architecture change
+**Goal**: Parent sets IOSurface Mach port in child's task, child retrieves it.
 
-2. **Direct Mach IPC**
-   - Use `mach_msg()` to send port rights directly
-   - Requires bootstrap server registration
-   - Complex low-level API
+```cpp
+// Host side (after fork)
+mach_port_t childTask;
+task_for_pid(mach_task_self(), childPid, &childTask);
+mach_port_t surfacePort = IOSurfaceCreateMachPort(surface);
+task_set_special_port(childTask, TASK_BOOTSTRAP_PORT, surfacePort);
 
-3. **MIG (Mach Interface Generator)**
-   - Define custom Mach interface
-   - Auto-generates client/server stubs
-   - Overkill for this use case
+// Child side
+mach_port_t surfacePort;
+task_get_special_port(mach_task_self(), TASK_BOOTSTRAP_PORT, &surfacePort);
+IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
+```
 
-For now, the global ID approach works reliably and the deprecation is cosmetic - Apple hasn't removed the functionality.
+**Result**: `task_for_pid()` failed with `KERN_FAILURE` (kr=5).
+
+**Root cause**: `task_for_pid()` requires the `com.apple.security.cs.debugger` entitlement on modern macOS. Despite the name, this entitlement controls access to another process's task port (used by debuggers but also needed for Mach port manipulation). Even parent→child access after fork requires this entitlement, which must be code-signed by Apple or with SIP disabled.
+
+#### 3. XPC (Not implemented - overkill)
+
+- Use `IOSurfaceCreateXPCObject()` to wrap surface
+- Requires XPC service with launchd plist
+- Significant architecture change for cross-platform project
+
+#### 4. Direct Mach IPC via mach_msg() (Not implemented)
+
+- Send port rights directly with `mach_msg()`
+- Requires bootstrap server registration
+- Complex low-level API
+
+### Conclusion
+
+None of the Mach port-based alternatives were ever viable for this use case:
+
+- **SCM_RIGHTS**: Only passes Unix FDs, not Mach ports
+- **task_for_pid()**: Requires restricted entitlements that regular apps cannot obtain
+- **XPC**: Requires launchd infrastructure, impractical for cross-platform project
+- **mach_msg()**: Requires bootstrap server registration, excessive complexity
+
+The `kIOSurfaceIsGlobal` + `IOSurfaceLookup()` approach is the only practical solution. Apple deprecated it but hasn't removed it because there's no simple replacement for cross-process IOSurface sharing outside of XPC. The deprecation is cosmetic - it works reliably.
 
 ## IPC Channel
 

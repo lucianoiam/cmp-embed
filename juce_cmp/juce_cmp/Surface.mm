@@ -26,20 +26,13 @@ bool Surface::create(int width, int height)
     width_ = width;
     height_ = height;
 
-    // Note: kIOSurfaceIsGlobal is deprecated but required for cross-process
-    // IOSurface lookup via IOSurfaceLookup(). The alternative (XPC or Mach IPC
-    // to pass Mach ports) requires significant architecture changes.
-    // TODO: Migrate to XPC for proper IOSurface sharing.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    // Initial surface: No kIOSurfaceIsGlobal needed - Mach port is passed via bootstrap IPC
     NSDictionary* props = @{
         (id)kIOSurfaceWidth: @(width),
         (id)kIOSurfaceHeight: @(height),
         (id)kIOSurfaceBytesPerElement: @4,
-        (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
-        (id)kIOSurfaceIsGlobal: @YES
+        (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA')
     };
-#pragma clang diagnostic pop
 
     surface_ = IOSurfaceCreate((__bridge CFDictionaryRef)props);
     return surface_ != nullptr;
@@ -114,6 +107,18 @@ uint32_t Surface::getID() const
     if (surface_ == nullptr)
         return 0;
     return IOSurfaceGetID((IOSurfaceRef)surface_);
+#else
+    return 0;
+#endif
+}
+
+uint32_t Surface::createMachPort() const
+{
+#if __APPLE__
+    if (surface_ == nullptr)
+        return 0;
+    mach_port_t port = IOSurfaceCreateMachPort((IOSurfaceRef)surface_);
+    return (uint32_t)port;
 #else
     return 0;
 #endif

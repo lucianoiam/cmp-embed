@@ -46,6 +46,14 @@ public:
      */
     uint32_t getID() const;
 
+    /**
+     * Create a Mach port for the surface (macOS only).
+     * Used for sharing IOSurface via Mach IPC without kIOSurfaceIsGlobal.
+     * Caller must deallocate the port with mach_port_deallocate().
+     * Returns 0 on failure.
+     */
+    uint32_t createMachPort() const;
+
     /** Get the native surface handle (IOSurfaceRef on macOS). */
     void* getNativeHandle() const;
 

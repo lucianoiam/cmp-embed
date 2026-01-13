@@ -25,9 +25,12 @@ public:
     ChildProcess(const ChildProcess&) = delete;
     ChildProcess& operator=(const ChildProcess&) = delete;
 
-    /** Launch the child process with the given executable and arguments. */
+    /** Launch the child process with the given executable and arguments.
+     *  machServiceName: (macOS) Mach service name for IOSurface port sharing
+     */
     bool launch(const std::string& executable,
                 float scale,
+                const std::string& machServiceName = "",
                 const std::string& workingDir = "");
 
     /** Stop the child process gracefully, with fallback to force kill. */

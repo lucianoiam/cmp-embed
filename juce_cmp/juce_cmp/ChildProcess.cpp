@@ -23,6 +23,7 @@ ChildProcess::~ChildProcess()
 
 bool ChildProcess::launch(const std::string& executable,
                           float scale,
+                          const std::string& machServiceName,
                           const std::string& workingDir)
 {
 #if __APPLE__ || __linux__
@@ -32,6 +33,9 @@ bool ChildProcess::launch(const std::string& executable,
         return false;
 
     std::string scaleArg = "--scale=" + std::to_string(scale);
+    std::string machServiceArg;
+    if (!machServiceName.empty())
+        machServiceArg = "--mach-service=" + machServiceName;
 
     // Create Unix socket pair for bidirectional IPC
     int sockets[2];
@@ -51,11 +55,23 @@ bool ChildProcess::launch(const std::string& executable,
         if (!workingDir.empty())
             chdir(workingDir.c_str());
 
-        execl(executable.c_str(),
-              executable.c_str(),
-              socketArg.c_str(),
-              scaleArg.c_str(),
-              nullptr);
+        if (!machServiceArg.empty())
+        {
+            execl(executable.c_str(),
+                  executable.c_str(),
+                  socketArg.c_str(),
+                  scaleArg.c_str(),
+                  machServiceArg.c_str(),
+                  nullptr);
+        }
+        else
+        {
+            execl(executable.c_str(),
+                  executable.c_str(),
+                  socketArg.c_str(),
+                  scaleArg.c_str(),
+                  nullptr);
+        }
 
         // If exec fails, exit child
         _exit(1);
@@ -78,6 +94,7 @@ bool ChildProcess::launch(const std::string& executable,
 #else
     (void)executable;
     (void)scale;
+    (void)machServiceName;
     (void)workingDir;
     return false;
 #endif
