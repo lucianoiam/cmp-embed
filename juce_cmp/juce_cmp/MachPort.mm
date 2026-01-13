@@ -7,6 +7,8 @@
 #include <mach/mach.h>
 #include <servers/bootstrap.h>
 #include <unistd.h>
+#include <cstdlib>
+#include <ctime>
 #endif
 
 namespace juce_cmp
@@ -22,9 +24,10 @@ MachPort::~MachPort()
 std::string MachPort::createServer()
 {
 #if __APPLE__
-    // Generate unique service name using PID
+    // Generate unique service name using PID + random ID
+    uint32_t randomId = arc4random();
     char name[64];
-    snprintf(name, sizeof(name), "com.juce-cmp.surface.%d", getpid());
+    snprintf(name, sizeof(name), "com.juce-cmp.surface.%d.%u", getpid(), randomId);
     serviceName_ = name;
 
     // Check in with bootstrap server - creates the service and gives us a receive port
