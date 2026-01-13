@@ -44,7 +44,6 @@ public:
 
     // View management (called by Component)
     void attachView(void* parentNativeHandle);
-    void detachView();
     void updateViewBounds(int x, int y, int width, int height);
 
     // Resize handling - defers view update until new surface is ready

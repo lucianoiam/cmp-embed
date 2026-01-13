@@ -8,3 +8,4 @@
 - Never push commits to git without explicit user confirmation
 - Remove debug log lines (fprintf, println, etc.) before committing
 - Avoid merge commits - use `git rebase` to integrate changes and keep a linear history
+- Check for dead code after architectural changes and remove it

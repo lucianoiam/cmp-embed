@@ -19,8 +19,7 @@ namespace juce_cmp
  * - Provides peer handle and bounds for view attachment
  * - Handles loading preview display
  */
-class ComposeComponent : public juce::Component,
-                           private juce::ComponentListener
+class ComposeComponent : public juce::Component
 {
 public:
     ComposeComponent();
@@ -70,8 +69,6 @@ public:
     void focusLost(FocusChangeType cause) override;
 
 private:
-    void componentMovedOrResized(juce::Component& component, bool wasMoved, bool wasResized) override;
-
     void tryLaunch();
     void updateViewBounds();
     int getModifiers() const;

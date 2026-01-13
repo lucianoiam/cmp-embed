@@ -116,11 +116,6 @@ void ComposeProvider::attachView(void* parentNativeHandle)
         view_.attachToParent(parentNativeHandle);
 }
 
-void ComposeProvider::detachView()
-{
-    view_.detachFromParent();
-}
-
 void ComposeProvider::updateViewBounds(int x, int y, int width, int height)
 {
     // Update both actual and pending bounds

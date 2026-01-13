@@ -17,9 +17,6 @@ ComposeComponent::ComposeComponent()
 
 ComposeComponent::~ComposeComponent()
 {
-    if (auto* topLevel = getTopLevelComponent())
-        topLevel->removeComponentListener(this);
-
     provider_.stop();
 }
 
@@ -40,11 +37,6 @@ void ComposeComponent::parentHierarchyChanged()
         provider_.attachView(peer->getNativeHandle());
         updateViewBounds();
     }
-}
-
-void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
-{
-    updateViewBounds();
 }
 
 void ComposeComponent::paint(juce::Graphics& g)
